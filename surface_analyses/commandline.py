@@ -37,8 +37,9 @@ def main():
     pot_parser.add_argument('--rmax', default=0.3, type=float)
     pot_parser.add_argument('--solv_rad', default=0.14, type=float)
     pot_parser.add_argument('--grid_spacing', help='Grid spacing in NANOMETERS [nm]', default=.05, type=float)
-    pot_parser.add_argument('--rcut', help='rcut parameter for Heiden weighting function, [nm]', default=.5, type=float)
-    pot_parser.add_argument('--alpha', help='alpha parameter for Heiden weighting function, [nm^-1]', default=15., type=float)
+    pot_parser.add_argument('--rcut', help='rcut parameter for Heiden weighting function [nm]', default=.5, type=float)
+    pot_parser.add_argument('--alpha', help='alpha parameter for Heiden weighting function [nm^-1]', default=15., type=float)
+    pot_parser.add_argument('--blur_sigma', help='Sigma for distance to gaussian surface [nm]', default=.6, type=float)
 
     args = parser.parse_args()
 
@@ -93,6 +94,7 @@ def main():
             solv_rad=args.solv_rad,
             rcut=args.rcut,
             alpha=args.alpha,
+            blur_sigma=args.blur_sigma,
         )
         output['hydrophobic_potential'] = dict(surfs._asdict())
     np.savez(args.out, **output)

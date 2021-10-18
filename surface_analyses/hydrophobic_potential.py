@@ -1,21 +1,25 @@
 from collections import namedtuple
 import math
+import warnings
 
 from scipy.spatial import cKDTree
+from scipy.ndimage import map_coordinates
 import gisttools as gt
 from skimage.measure import marching_cubes
+from skimage.filters import gaussian
 import numpy as np
 
 
-Surfaces = namedtuple('Surfaces', ['verts', 'faces', 'values', 'atom'])
+Surfaces = namedtuple('Surfaces', ['verts', 'faces', 'values', 'atom', 'blurred_lvl'])
 
 
-def hydrophobic_potential(traj, propensities, rmax, spacing, solv_rad, rcut, alpha):
+def hydrophobic_potential(traj, propensities, rmax, spacing, solv_rad, rcut, alpha, blur_sigma):
     radii = np.array([a.element.radius for a in traj.top.atoms])
     frame_verts = []
     frame_faces = []
     frame_projections = []
     frame_closest_atoms = []
+    frame_blurred = []
     for frame in traj.xyz:
         pot = MoeHydrophobicPotential(frame, propensities, rcut, alpha)
         extent = cubic_extent(frame) + 2*rmax
@@ -25,11 +29,13 @@ def hydrophobic_potential(traj, propensities, rmax, spacing, solv_rad, rcut, alp
         surf_vals = pot.evaluate(verts)
         tree = cKDTree(frame)
         _, closest_atom = tree.query(verts)
+        blurred = gaussian_grid(grid, frame, blur_sigma)
+        frame_blurred.append(map_coordinates(blurred, verts.T, order=1))
         frame_verts.append(verts)
         frame_faces.append(faces)
         frame_projections.append(surf_vals)
         frame_closest_atoms.append(closest_atom)
-    return Surfaces(frame_verts, frame_faces, frame_projections, frame_closest_atoms)
+    return Surfaces(frame_verts, frame_faces, frame_projections, frame_closest_atoms, frame_blurred)
 
 
 class MoeHydrophobicPotential:
@@ -123,6 +129,16 @@ def sas_grid(grid, xyz, radii, rmax=.3, fill_val=1000.):
     fulldist = np.full(grid.n_voxels, fill_val, dtype='float32')
     fulldist[ind] = dist
     return fulldist
+
+
+def gaussian_grid(grid, xyz, sigma):
+    i_vox = grid.assign(xyz)
+    outside = np.flatnonzero(i_vox == -1)
+    if len(outside) != 0:
+        warnings.warn("Atoms are outside the grid for gaussian_grid")
+        i_vox = i_vox[~outside]
+    out = np.bincount(i_vox, minlength=grid.size).reshape(grid.shape)
+    return gaussian(out, sigma=sigma/grid.delta)
 
 
 def solvent_surface(solvdist, grid):
