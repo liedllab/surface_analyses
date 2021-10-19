@@ -133,11 +133,11 @@ def sas_grid(grid, xyz, radii, rmax=.3, fill_val=1000.):
 
 def gaussian_grid(grid, xyz, sigma):
     i_vox = grid.assign(xyz)
-    outside = np.flatnonzero(i_vox == -1)
-    if len(outside) != 0:
+    outside = i_vox == -1
+    if np.any(outside):
         warnings.warn("Atoms are outside the grid for gaussian_grid")
         i_vox = i_vox[~outside]
-    out = np.bincount(i_vox, minlength=grid.size).reshape(grid.shape)
+    out = np.float64(np.bincount(i_vox, minlength=grid.size)).reshape(grid.shape)
     return gaussian(out, sigma=sigma/grid.delta)
 
 
