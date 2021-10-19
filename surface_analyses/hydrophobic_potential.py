@@ -30,7 +30,8 @@ def hydrophobic_potential(traj, propensities, rmax, spacing, solv_rad, rcut, alp
         tree = cKDTree(frame)
         _, closest_atom = tree.query(verts)
         blurred = gaussian_grid(grid, frame, blur_sigma)
-        frame_blurred.append(map_coordinates(blurred, verts.T, order=1))
+        grid_coords = (frame - grid.origin) / grid.delta
+        frame_blurred.append(map_coordinates(blurred, grid_coords.T, order=1))
         frame_verts.append(verts)
         frame_faces.append(faces)
         frame_projections.append(surf_vals)
