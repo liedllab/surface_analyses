@@ -51,7 +51,7 @@ def main():
         ref=args.ref,
         sel='not resname HOH'
     )
-    traj.center_coordinates()
+    # traj.center_coordinates()
     atoms = get_atoms_list(args.parm)
     strip_h = args.scale == 'eisenberg' and not args.group_heavy
     if strip_h:
