@@ -1,14 +1,14 @@
 from .hydrophobic_potential import hydrophobic_potential
 from .structure import load_aligned_trajectory, heavy_atom_grouper, saa_ref
 from .propensities import get_propensity_mapping
+from .prmtop import RawTopology
+from .pdb import PdbAtom
+import .sap
 
 import warnings
 
 import mdtraj as md
 import numpy as np
-from prmtop.raw_topology import RawTopology
-from prmtop.pdb import PdbAtom
-import sap.sap as sap
 
 def main():
     import argparse
