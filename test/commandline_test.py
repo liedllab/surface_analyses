@@ -36,6 +36,9 @@ def run_commandline(parm, traj, scale, outfile, *args):
 def test_output_consistent(trastuzumab_run):
     runtype = trastuzumab_run.method
     scale = trastuzumab_run.scale
+    parm7 = os.path.join(BASEPATH, 'input.parm7')
+    rst7 = os.path.join(BASEPATH, 'input.rst7')
+    ref = os.path.join(BASEPATH, '1f4w-standard-orientation.pdb')
     if runtype == 'direct':
         args = ['--surfscore']
     elif runtype == 'sap':
@@ -43,13 +46,11 @@ def test_output_consistent(trastuzumab_run):
     elif runtype == 'sap-byatom':
         args = ['--sap', '--surftype', 'atom_norm', '--group_heavy']
     elif runtype == 'potential':
-        args = ['--potential']
+        args = ['--potential', '--ref', ref]
     if scale == 'wimley-white':
         scale = os.path.join(BASEPATH, 'wimley-white-scaled.csv')
     with tempfile.TemporaryDirectory() as tmp:
         out = os.path.join(tmp, 'out.npz')
-        parm7 = os.path.join(BASEPATH, 'input.parm7')
-        rst7 = os.path.join(BASEPATH, 'input.rst7')
         run_commandline(parm7, rst7, scale, out, *args)
         with np.load(out, allow_pickle=True) as npz:
             assert sorted(npz) == sorted(trastuzumab_run.expected_data)

@@ -122,12 +122,12 @@ def sas_grid(grid, xyz, radii, rmax=.3, fill_val=1000.):
     
     Returns
     -------
-    fulldist: np.array, shape=(grid.n_voxels,)
+    fulldist: np.array, shape=(grid.size,)
         For each voxel closer to xyz than rmax, contains the distance to 
         the closest point in xyz. For other voxels, contains fill_val.
     """
     ind, closest, dist = grid.distance_to_spheres(xyz, rmax, radii)
-    fulldist = np.full(grid.n_voxels, fill_val, dtype='float32')
+    fulldist = np.full(grid.size, fill_val, dtype='float32')
     fulldist[ind] = dist
     return fulldist
 
