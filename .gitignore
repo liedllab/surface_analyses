@@ -1,2 +1,6 @@
 test/trastuzumab/get.sh
 test/trastuzumab/make-pdb.sh
+__pycache__
+*.pyc
+build
+.eggs/*

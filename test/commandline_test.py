@@ -60,6 +60,9 @@ def test_output_consistent(trastuzumab_run):
                     expected = trastuzumab_run.expected_data[key][()]
                     for k, v in run_values.items():
                         np.testing.assert_allclose(v, expected[k])
+                elif len(np.asarray(npz[key]).shape) == 2:
+                    for i, (v1, v2) in enumerate(zip(npz[key][0], trastuzumab_run.expected_data[key][0])):
+                        assert (np.isnan(v1) and np.isnan(v2)) or v1 == pytest.approx(v2), (i, v1, v2)
                 else:
                     for i, (v1, v2) in enumerate(zip(npz[key], trastuzumab_run.expected_data[key])):
                         assert v1 == pytest.approx(v2), (i, v1, v2)
