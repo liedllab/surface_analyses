@@ -14,7 +14,7 @@ TrastuzumabRun = namedtuple('TrastuzumabRun', 'scale method expected_data')
 ALL_RUNS = [
     (scale, method)
     for scale in ['crippen', 'eisenberg', 'wimley-white']
-    for method in ['direct', 'sap', 'sap-byatom', 'potential']
+    for method in ['direct', 'sap', 'sap-byatom', 'potential', 'surrounding-hydrophobicity']
 ]
 
 BASEPATH = os.path.join(os.path.dirname(__file__), 'trastuzumab')
@@ -47,6 +47,10 @@ def test_output_consistent(trastuzumab_run):
         args = ['--sap', '--surftype', 'atom_norm', '--group_heavy']
     elif runtype == 'potential':
         args = ['--potential', '--ref', ref]
+    elif runtype == 'surrounding-hydrophobicity':
+        args = ['--sh']
+    else:
+        raise ValueError(runtype)
     if scale == 'wimley-white':
         scale = os.path.join(BASEPATH, 'wimley-white-scaled.csv')
     with tempfile.TemporaryDirectory() as tmp:
