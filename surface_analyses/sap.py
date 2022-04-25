@@ -47,33 +47,3 @@ def blur(
             weights = 1
         blurred.append((v[neighbors] * weights).sum())
     return np.array(blurred)
-
-
-# Sidechain SAA in nm^2, averaged over short MD simulations of ACE-X-NME.
-_default_sidechain_saa = {
-    "ALA": 0.594017550349,
-    "ARG": 2.05252944492,
-    "ASN": 1.09079792118,
-    "ASP": 0.971595257521,
-    "CYS": 0.882727324963,
-    "GLN": 1.38791826623,
-    "GLU": 1.30966766085,
-    "GLY": 0.186710074544,
-    "HIS": 1.416356848696,  # 88.8 % HID/HIE, 11.2 % HIP
-    "HID": 1.41232917458,  # twice the same for HID and HIE
-    "HIE": 1.41232917458,
-    "HIP": 1.44829055062,
-    "ILE": 1.33404062502,
-    "LEU": 1.40599354915,
-    "LYS": 1.71556117944,
-    "MET": 1.48098336253,
-    "PHE": 1.68156359531,
-    "PRO": 1.12518100068,
-    "SER": 0.742956539616,
-    "THR": 1.05462151393,
-    "TRP": 2.03259896627,
-    "TYR": 1.82585927006,
-    "VAL": 1.10587068833,
-    "NME": 100000., # high value => always counts as buried.
-    "ACE": 100000.,
-}

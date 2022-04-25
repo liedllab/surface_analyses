@@ -12,7 +12,7 @@ def grouper(iterable, n, fillvalue=None):
     args = [iter(iterable)] * n
     return zip_longest(*args, fillvalue=fillvalue)
 
-FORMAT_RE_PATTERN = re.compile("%FORMAT\(([0-9]+)([a-zA-Z]+)([0-9]+)\.?([0-9]*)\)")
+FORMAT_RE_PATTERN = re.compile(r"%FORMAT\(([0-9]+)([a-zA-Z]+)([0-9]+)\.?([0-9]*)\)")
 
 class RawTopology:
     """Manages an AMBER prmtop topology file from disk, as a dict of lists, 
@@ -197,8 +197,7 @@ class Format(namedtuple('Format', ['num', 'type', 'length', 'precision'])):
                 yield item.strip()
 
 
-@AbstractAtom.register
-class ParmAtom(namedtuple('ParmAtom', ['i', 'top'])):
+class ParmAtom(namedtuple('ParmAtom', ['i', 'top']), AbstractAtom):
 
     @property
     def residue_id(self):

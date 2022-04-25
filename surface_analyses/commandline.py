@@ -1,16 +1,22 @@
+import datetime
+import logging
+import warnings
+import sys
+
+import mdtraj as md
+import numpy as np
+
 from .hydrophobic_potential import hydrophobic_potential
 from .structure import load_aligned_trajectory, heavy_atom_grouper, saa_ref
 from .propensities import get_propensity_mapping
 from .prmtop import RawTopology
 from .pdb import PdbAtom
-import .sap
+from .sap import blur as sap_blur
 
-import warnings
-
-import mdtraj as md
-import numpy as np
-
-def main():
+def main(args=None):
+    print(f"surfscore starting at {datetime.datetime.now()}")
+    if args is None:
+        args = sys.argv[1:]
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('parm')
@@ -31,7 +37,14 @@ def main():
         'Black&Mould scale and the --surftype sc_norm option.'
     ))
     sap_parser.add_argument('--blur_rad', type=float, default=0.5, help='Blur radius [nm]')
-
+    sh_parser = parser.add_argument_group('Options for surrounding hydrophobicity')
+    sh_parser.add_argument('--sh', action='store_true', help=(
+        'Compute surrounding hydrophobicity arrording to '
+        'https://www.nature.com/articles/275673a0'
+    ))
+    sh_parser.add_argument('--sh_rad', type=float, default=0.8, help=(
+        'Radius for surrounding hydrophobicity [nm]'
+    ))
     pot_parser = parser.add_argument_group('Hydrophobic potential options')
     pot_parser.add_argument('--potential', action='store_true')
     pot_parser.add_argument('--rmax', default=0.3, type=float)
@@ -40,8 +53,11 @@ def main():
     pot_parser.add_argument('--rcut', help='rcut parameter for Heiden weighting function [nm]', default=.5, type=float)
     pot_parser.add_argument('--alpha', help='alpha parameter for Heiden weighting function [nm^-1]', default=15., type=float)
     pot_parser.add_argument('--blur_sigma', help='Sigma for distance to gaussian surface [nm]', default=.6, type=float)
+    parser.add_argument('-v', '--verbose', action='store_true')
+    args = parser.parse_args(args)
 
-    args = parser.parse_args()
+    if args.verbose:
+        logging.basicConfig(level=logging.INFO)
 
     print('Loading Trajectory')
     traj = load_aligned_trajectory(
@@ -51,10 +67,11 @@ def main():
         ref=args.ref,
         sel='not resname HOH'
     )
-    # traj.center_coordinates()
+    logging.info(f"Loaded trajectory: {traj}")
     atoms = get_atoms_list(args.parm)
     strip_h = args.scale == 'eisenberg' and not args.group_heavy
     if strip_h:
+        logging.info(f"Stripping hydrogen atoms")
         atoms = [a for a in atoms if is_heavy(a)]
         traj = traj.atom_slice(traj.top.select('not element H'))
     print(f'Loaded {traj.n_frames} frames with {traj.n_atoms} atoms.')
@@ -78,10 +95,30 @@ def main():
     if args.surfscore:
         print('Computing Surface score')
         output['surfscore'] = saa * propensities[np.newaxis, :]
+    if args.sh:
+        print('Computing Surrounding Hydrophobicity')
+        i_res = np.array([a.residue_id for a in atoms])
+        print(i_res)
+        n_res = np.max(i_res) + 1
+        ca = np.full(n_res, -1, dtype=int)
+        for i, a in enumerate(atoms):
+            if a.name == "CA":
+                ca[a.residue_id] = i
+        has_ca = ca != -1
+        sh_per_atom = []
+        propensities_ca = propensities[ca[has_ca]]
+        for frame in coords[:, ca[has_ca]]:
+            sh_ca = sap_blur(frame, propensities[ca[has_ca]], args.sh_rad)
+            # remove self-interaction in the surrounding hydrophobicity
+            sh_ca -= propensities_ca
+            sh_per_residue = np.zeros(n_res, dtype=float)
+            sh_per_residue[has_ca] = sh_ca
+            sh_per_atom.append(sh_per_residue[i_res])
+        output['surrounding_hydrophobicity'] = np.array(sh_per_atom)
     if args.sap:
         print('Applying SAP blur')
         output['sap'] = np.array([
-            sap.blur(frame, frame_saa * propensities, args.blur_rad)
+            sap_blur(frame, frame_saa * propensities, args.blur_rad)
             for frame, frame_saa in zip(coords, saa)
         ])
     if args.potential:
@@ -114,16 +151,25 @@ def get_pdb_atoms_list(fname):
     raw = md.load_pdb(fname, standard_names=False)
     raw = raw.atom_slice(raw.top.select('not resname HOH WAT NA CL'))
     atoms = PdbAtom.list_from_md_topology(raw.top)
+    # In mdtraj, the hydrogens of the N-terminal residue are not bonded to
+    # anything. Bond them to the respective N atom.
+    # no_bonds = [a for a in atoms if len(a.bonded_atoms) == 0]
+    # for a in no_bonds:
+    #     resid = a.residue_id
+    #     if a.atomic_number != 1:
+    #         warnings.warn(f"Encountered a heavy atom without bonds: {a}. Cannot form bonds for this atom.")
+    #         continue
+    #     # Expect that the N is before the H, but in the same residue, and
+    #     # within the first 20 atoms.
+    #     for other in atoms[:20][:a.i]:
+    #         if other.residue_id == resid and other.name == 'N':
+    #             a._bond(other)
+    #             break
+    #     else:
+    #         warnings.warn(f'Could not bond atom {a}')
     no_bonds = [a for a in atoms if len(a.bonded_atoms) == 0]
-    for a in no_bonds:
-        resid = a.residue_id
-        for shift in range(1, min(a.i + 1, 20)):
-            other = atoms[a.i - shift]
-            if other.residue_id == resid and other.name == 'N':
-                a._bond(other)
-                break
-        else:
-            warnings.warn(f'Could not bond atom {a}')
+    if no_bonds:
+        raise ValueError(f"The following atoms have no bond partners: {no_bonds}")
     return atoms
 
 def is_heavy(atom):

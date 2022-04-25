@@ -2,9 +2,9 @@ from itertools import chain
 from prmtop.crippen import aa_sasa
 import mdtraj as md
 import numpy as np
-import sap.sap as sap
 import TMalign_wrapper.io as tm
 
+from .data import AVERAGE_SIDECHAIN_SAA
 
 def load_aligned_trajectory(filenames, topname, stride, ref, sel):
     traj = load_trajectory(filenames, topname, stride, sel)
@@ -82,7 +82,7 @@ def sidechain_saa_ref(traj):
 
 def sidechain_saa_per_atom(top, sidechain_saa=None):
     if sidechain_saa is None:
-        sidechain_saa = sap._default_sidechain_saa
+        sidechain_saa = AVERAGE_SIDECHAIN_SAA
     return np.array([
         sidechain_saa[at.residue.name]
         for at in top.atoms
