@@ -167,9 +167,9 @@ def get_pdb_atoms_list(fname):
     #             break
     #     else:
     #         warnings.warn(f'Could not bond atom {a}')
-    no_bonds = [a for a in atoms if len(a.bonded_atoms) == 0]
-    if no_bonds:
-        raise ValueError(f"The following atoms have no bond partners: {no_bonds}")
+    # no_bonds = [a for a in atoms if len(a.bonded_atoms) == 0]
+    # if no_bonds:
+    #     raise ValueError(f"The following atoms have no bond partners: {no_bonds}")
     return atoms
 
 def is_heavy(atom):

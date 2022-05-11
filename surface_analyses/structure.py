@@ -75,7 +75,7 @@ def saa_ref(traj, atoms, surftype):
 
 def sidechain_saa_ref(traj):
     saa = sidechain_saa_per_atom(traj.top)
-    bb_sel = traj.top.select('backbone or (name H) or (name HA) or (name HA2)')
+    bb_sel = traj.top.select('backbone or name H HA HA2 or resname ACE NME')
     saa[bb_sel] = np.inf
     return saa
 
