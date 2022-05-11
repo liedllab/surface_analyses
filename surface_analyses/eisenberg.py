@@ -1,6 +1,6 @@
 #!/bin/env python
 
-import prmtop.raw_topology as raw_top
+from .prmtop import RawTopology
 
 EISENBERG_TYPES = {
     "C":  "C",
@@ -47,7 +47,7 @@ EISENBERG_PARAMS = {  # unit: cal A^-2 mol^-1
 }
 EISENBERG_PARAMS['N+1/2'] = (EISENBERG_PARAMS['N/O'] + EISENBERG_PARAMS['N+']) / 2
 
-def heavy_atoms(top: raw_top.RawTopology, nmax=None):
+def heavy_atoms(top: RawTopology, nmax=None):
     for at in top.iter_atoms(nmax):
         if at.atomic_number != 1:
             yield at

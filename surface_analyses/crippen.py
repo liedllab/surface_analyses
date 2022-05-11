@@ -1,5 +1,3 @@
-from functools import cache
-import pandas as pd
 import warnings
 
 from .data import ATOM_DATA, CRIPPEN_PARAMS

@@ -1,10 +1,9 @@
 from itertools import chain
-from prmtop.crippen import aa_sasa
 import mdtraj as md
 import numpy as np
 import TMalign_wrapper.io as tm
 
-from .data import AVERAGE_SIDECHAIN_SAA
+from .data import AVERAGE_SIDECHAIN_SAA, ATOM_DATA
 
 def load_aligned_trajectory(filenames, topname, stride, ref, sel):
     traj = load_trajectory(filenames, topname, stride, sel)
@@ -91,12 +90,12 @@ def sidechain_saa_per_atom(top, sidechain_saa=None):
 
 def get_ref_surf(residue, atom):
     key = (residue, atom)
-    from_table = aa_sasa().get(key, np.nan)
-    if np.isnan(from_table) and atom in {'H1', 'H2', 'H3'}:
-        # using LYS as a reference for the N terminus
-        n_term_h = aa_sasa().get(('LYS', 'HZ1'), np.nan)
-        return n_term_h
-    elif np.isnan(from_table) and atom == 'OXT':
-        o_term = aa_sasa().get(('ASP', 'OD1'), np.nan)
-        return o_term
-    return from_table
+    try:
+        return ATOM_DATA[key][2]
+    except KeyError:
+        if atom == "OXT":
+            return ATOM_DATA[('ASP', 'OD1')][2]
+        elif atom in {'H1', 'H2', 'H3'}:
+            return ATOM_DATA[('LYS', 'HZ1')][2]
+        else:
+            return np.nan

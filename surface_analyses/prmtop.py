@@ -2,7 +2,6 @@ import re
 from bisect import bisect_right
 from collections import namedtuple, defaultdict
 from itertools import zip_longest, chain
-from typing import Dict, Tuple, Any
 
 from .pdb import AbstractAtom
 

@@ -1,6 +1,4 @@
 import abc
-from functools import cache
-import csv
 import logging
 import itertools
 
@@ -106,7 +104,7 @@ class AbstractAtom(abc.ABC):
             return False
         c = self.bonded_atoms[0]
         if c.name != "C":
-            raise ValueError(f"Weird atom naming: {c} bonded to {o}")
+            raise ValueError(f"Weird atom naming: {c} bonded to {self}")
         return c._is_c_terminal_c()
 
 

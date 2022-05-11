@@ -1,5 +1,5 @@
-from prmtop.crippen import logp
-from prmtop.eisenberg import amber_to_eisen_value
+from .crippen import logp
+from .eisenberg import amber_to_eisen_value
 
 import pandas as pd
 

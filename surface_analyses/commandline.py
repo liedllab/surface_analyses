@@ -1,6 +1,5 @@
 import datetime
 import logging
-import warnings
 import sys
 
 import mdtraj as md
@@ -71,7 +70,7 @@ def main(args=None):
     atoms = get_atoms_list(args.parm)
     strip_h = args.scale == 'eisenberg' and not args.group_heavy
     if strip_h:
-        logging.info(f"Stripping hydrogen atoms")
+        logging.info("Stripping hydrogen atoms")
         atoms = [a for a in atoms if is_heavy(a)]
         traj = traj.atom_slice(traj.top.select('not element H'))
     print(f'Loaded {traj.n_frames} frames with {traj.n_atoms} atoms.')

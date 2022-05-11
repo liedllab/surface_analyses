@@ -18,10 +18,8 @@ command line interface. The functionality of the CLI is limited, however. It
 supports a single PDB input. The distance cutoff can be changed, but no
 weighting functions are implemented.
 """
-import mdtraj as md
 import numpy as np
-import pandas as pd
-from typing import Dict, List, Union, Callable, Optional
+from typing import List, Union, Callable, Optional
 from scipy.spatial import cKDTree
 
 
