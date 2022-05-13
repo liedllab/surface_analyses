@@ -186,4 +186,4 @@ class PdbAtom(AbstractAtom):
         return out
 
     def __repr__(self):
-        return f'PdbAtom({self.i=}, {self.residue_id=}, {self.residue_label=}, {self.name=}, {self.atomic_number=}, {self._atom_type=})'
+        return f'PdbAtom({self.i}, {self.residue_id}, {self.residue_label}, {self.name}, {self.atomic_number}, atom_type={self._atom_type})'
