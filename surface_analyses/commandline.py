@@ -4,6 +4,7 @@ import sys
 
 import mdtraj as md
 import numpy as np
+import matplotlib as mpl
 
 from .hydrophobic_potential import hydrophobic_potential
 from .structure import load_aligned_trajectory, heavy_atom_grouper, saa_ref
@@ -52,6 +53,7 @@ def main(args=None):
     pot_parser.add_argument('--rcut', help='rcut parameter for Heiden weighting function [nm]', default=.5, type=float)
     pot_parser.add_argument('--alpha', help='alpha parameter for Heiden weighting function [nm^-1]', default=15., type=float)
     pot_parser.add_argument('--blur_sigma', help='Sigma for distance to gaussian surface [nm]', default=.6, type=float)
+    pot_parser.add_argument('--ply_out', help='Output .ply file of first frame for PyMOL')
     parser.add_argument('-v', '--verbose', action='store_true')
     args = parser.parse_args(args)
 
@@ -132,9 +134,27 @@ def main(args=None):
             alpha=args.alpha,
             blur_sigma=args.blur_sigma,
         )
-        output['hydrophobic_potential'] = dict(surfs._asdict())
+        lists = {
+            'verts': [s.vertices for s in surfs],
+            'faces': [s.faces for s in surfs],
+            'values': [s['values'] for s in surfs],
+            'atom': [s['atom'] for s in surfs],
+            'blurred_lvl': [s['blurred_lvl'] for s in surfs],
+        }
+        output['hydrophobic_potential'] = lists
+        if args.ply_out:
+            surf0 = surfs[0]
+            color_surface(surf0, 'values')
+            surf0.write_ply(args.ply_out)
     np.savez(args.out, **output)
     args.out.close()
+
+def color_surface(surf, data, cmap='coolwarm'):
+    norm = mpl.colors.CenteredNorm()
+    cmap = mpl.cm.get_cmap(cmap)
+    values = norm(surf[data])
+    colors = cmap(values)[:, :3] * 256
+    surf.set_color(*colors.T)
 
 def get_atoms_list(fname):
     if fname.endswith('.parm7'):

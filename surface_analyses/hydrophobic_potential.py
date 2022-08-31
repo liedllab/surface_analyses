@@ -1,4 +1,4 @@
-from collections import namedtuple
+# from collections import namedtuple
 import math
 import warnings
 
@@ -9,17 +9,12 @@ from skimage.measure import marching_cubes
 from skimage.filters import gaussian
 import numpy as np
 
-
-Surfaces = namedtuple('Surfaces', ['verts', 'faces', 'values', 'atom', 'blurred_lvl'])
+from .surface import Surface
 
 
 def hydrophobic_potential(traj, propensities, rmax, spacing, solv_rad, rcut, alpha, blur_sigma):
     radii = np.array([a.element.radius for a in traj.top.atoms])
-    frame_verts = []
-    frame_faces = []
-    frame_projections = []
-    frame_closest_atoms = []
-    frame_blurred = []
+    surfaces = []
     for frame in traj.xyz:
         pot = MoeHydrophobicPotential(frame, propensities, rcut, alpha)
         extent = cubic_extent(frame) + 2*rmax
@@ -31,12 +26,12 @@ def hydrophobic_potential(traj, propensities, rmax, spacing, solv_rad, rcut, alp
         _, closest_atom = tree.query(verts)
         blurred = gaussian_grid(grid, frame, blur_sigma)
         grid_coords = (verts - grid.origin) / grid.delta
-        frame_blurred.append(map_coordinates(blurred, grid_coords.T, order=1))
-        frame_verts.append(verts)
-        frame_faces.append(faces)
-        frame_projections.append(surf_vals)
-        frame_closest_atoms.append(closest_atom)
-    return Surfaces(frame_verts, frame_faces, frame_projections, frame_closest_atoms, frame_blurred)
+        blurred_lvl = map_coordinates(blurred, grid_coords.T, order=1)
+        surfaces.append(Surface(verts, faces))
+        surfaces[-1]['values'] = surf_vals
+        surfaces[-1]['atom'] = closest_atom
+        surfaces[-1]['blurred_lvl'] = blurred_lvl
+    return surfaces
 
 
 class MoeHydrophobicPotential:
