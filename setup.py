@@ -23,7 +23,7 @@ setup(
     entry_points={
         'console_scripts': [
             'surfscore=surface_analyses.commandline:main',
-            'ele_patches=surface_analyses.ele_patches.main',
+            'ele_patches=surface_analyses.ele_patches:main',
         ],
     },
 )
