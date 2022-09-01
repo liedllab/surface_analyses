@@ -18,8 +18,12 @@ setup(
         "surface_analyses.propensities",
         "surface_analyses.hydrophobic_potential",
         "surface_analyses.pdb",
+        "surface_analyses.ele_patches",
     ],
     entry_points={
-        'console_scripts': ['surfscore=surface_analyses.commandline:main'],
+        'console_scripts': [
+            'surfscore=surface_analyses.commandline:main',
+            'ele_patches=surface_analyses.ele_patches.main',
+        ],
     },
 )
