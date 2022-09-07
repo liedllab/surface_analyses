@@ -11,8 +11,9 @@ from gisttools.gist import load_dx
 from mdtraj.core.element import carbon, nitrogen, oxygen, sulfur
 import chothia.hmmsearch_wrapper as hmm
 import os
-from patches import find_patches, triangles_area
+from .patches import find_patches, triangles_area
 from .surface import Surface
+from .hydrophobic_potential import gaussian_grid_variable_sigma
 import matplotlib as mpl
 
 
@@ -45,10 +46,19 @@ def main():
         help='Cutoffs for "high" and "low" integrals.'
     )
     parser.add_argument(
+        '--surface_type',
+        type=str,
+        choices=('sas', 'gauss'),
+        default='sas',
+        help='Whch type of molecular surface to produce.'
+    )
+    parser.add_argument(
         '--ply_out',
         type=str,
         help='Base name for .ply output for PyMOL. Will write BASE-pos.ply and BASE-neg.ply.',
     )
+    parser.add_argument('--gauss_shift', type=float, default=0.1)
+    parser.add_argument('--gauss_scale', type=float, default=1.0)
     args = parser.parse_args()
 
     print(f'ele_patches.py, {datetime.now().strftime("%m/%d/%Y, %H:%M:%S")}\n')
@@ -73,15 +83,31 @@ def main():
 
     print('Calculating triangulated SASA')
 
-    full_distances = np.full(gist.grid.size, 10000.)  # Arbitrarily high number.
-    ind, closest, dist = gist.distance_to_spheres(rmax=5., atomic_radii=radii)
-    full_distances[ind] = dist
+    if args.surface_type == 'sas':
+        full_distances = np.full(gist.grid.size, 10000.)  # Arbitrarily high number.
+        ind, closest, dist = gist.distance_to_spheres(rmax=5., atomic_radii=radii)
+        full_distances[ind] = dist
+        # rescale the distances such that they are compatible with Gaussian surface.
+        # higher distance outside, border at 0
+        full_distances -= args.probe_radius
+    else:
+        assert args.surface_type == 'gauss'
+        full_distances = gaussian_grid_variable_sigma(
+            gist.grid,
+            gist.coord,
+            radii * args.gauss_scale,
+            np.full(len(gist.coord), 5.),
+        ).ravel()
+        # rescale the distances such that they are compatible with SAS.
+        # higher distance outside, border at 0
+        full_distances -= args.gauss_shift
+        full_distances *= -1
 
     # Create a triangulated SASA.
     verts, faces, normals, values = marching_cubes(
         full_distances.reshape(gist.grid.shape),
         spacing=gist.grid.delta,
-        level=args.probe_radius,
+        level=0,
         gradient_direction='descent',
         allow_degenerate=False,
     )
@@ -93,7 +119,7 @@ def main():
 
     pdbtree = cKDTree(pdb.xyz[0] * 10.)
 
-    # Finally: The patch searching!
+    # The patch searching
     print('Finding patches')
     values = gist.interpolate(columns, verts)[columns[0]]
     pos_patches = find_patches(faces, values > args.patch_cutoff[0])
@@ -114,7 +140,6 @@ def main():
         patches.append({
             'type': 'positive',
             'npoints': len(patch),
-            # 'verts': patch,
             'area': np.sum(vert_areas[patch]),
             'cutoff': args.patch_cutoff[0],
             'cdr': check_cdr_patch(pdbtree, cdr_atoms, verts[patch]),
@@ -123,7 +148,6 @@ def main():
         patches.append({
             'type': 'negative',
             'npoints': len(patch),
-            # 'verts': patch,
             'area': np.sum(vert_areas[patch]),
             'cutoff': args.patch_cutoff[1],
             'cdr': check_cdr_patch(pdbtree, cdr_atoms, verts[patch]),
@@ -131,8 +155,8 @@ def main():
     patches = pd.DataFrame(patches)
     patches.to_csv(args.out)
 
-    # As a small add-on, compute the total solvent-accessible potential.
-    accessible = full_distances > args.probe_radius
+    # Compute the total solvent-accessible potential.
+    accessible = full_distances > 0
     voxel_volume = gist.grid.voxel_volume
     accessible_data = gist[columns[0]].values[accessible]
     integral = np.sum(accessible_data) * voxel_volume

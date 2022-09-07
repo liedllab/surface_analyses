@@ -9,7 +9,26 @@ from skimage.measure import marching_cubes
 from skimage.filters import gaussian
 import numpy as np
 
+import gisttools as gt
+
 from .surface import Surface
+
+# Todo: don't use a cubic grid for hydrophobic_potential. Rectangular is more
+# efficient.
+
+def grid_with_walldist(coordinates, walldist, spacing):
+    """Return a rectangular gisttools.grid.Grid with given wall distance to the
+    coordinates.
+
+    For the purposes of this function, the grid border is defined by the last
+    voxel border rather than the voxel centers.
+    """
+    coordinates = np.atleast_2d(coordinates)
+    assert len(coordinates.shape) == 2 and coordinates.shape[1] == 3
+    origin = np.min(coordinates, axis=0) - walldist + spacing / 2
+    xyzmax = np.max(coordinates, axis=0) + walldist - spacing / 2
+    dim = ((xyzmax - origin) // spacing).astype(int) + 1
+    return gt.grid.Grid(origin, dim, spacing)
 
 
 def hydrophobic_potential(traj, propensities, rmax, spacing, solv_rad, rcut, alpha, blur_sigma):
@@ -136,6 +155,34 @@ def gaussian_grid(grid, xyz, sigma):
     out = np.float64(np.bincount(i_vox, minlength=grid.size)).reshape(grid.shape)
     return gaussian(out, sigma=sigma/grid.delta)
 
+def gaussian_grid_variable_sigma(grid, xyz, sigma, rmax=None):
+    """sum(exp(-dist(x, x_i)**2)/(2*sigma_i**2)) at each grid point x, where
+    the sum is over every x_i out of xyz.
+
+    Parameters
+    ----------
+    grid : gisttools.grid.Grid
+    xyz : np.ndarray, shape (n_atoms, 3)
+    sigma : np.ndarray, shape (n_atoms,)
+        sigma_i for every atom (related to the atomic radius).
+    rmax : np.ndarray, shape (n_atoms,)
+        distance cutoff per atom. Default: 3*sigma
+    """
+    xyz = np.atleast_2d(xyz)
+    assert len(xyz.shape) == 2 and xyz.shape[1] == 3
+    n_atoms = xyz.shape[0]
+    sigma = np.asarray(sigma)
+    assert sigma.shape == (n_atoms,)
+    if rmax is None:
+        rmax = 3 * sigma
+    rmax = np.asarray(rmax)
+    assert rmax.shape == (n_atoms,)
+
+    out = np.zeros(grid.size, float)
+    for xyz_i, sigma_i, rmax_i in zip(xyz, sigma, rmax):
+        ind, dist = grid.surrounding_sphere(xyz_i, rmax_i)
+        out[ind] += np.exp(-dist**2/(2*sigma_i**2))
+    return out.reshape(grid.shape)
 
 def solvent_surface(solvdist, grid):
     verts, faces, normals, values = marching_cubes(
