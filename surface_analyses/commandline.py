@@ -1,6 +1,7 @@
 import datetime
 import logging
 import sys
+import warnings
 
 import mdtraj as md
 import numpy as np
@@ -12,6 +13,8 @@ from .propensities import get_propensity_mapping
 from .prmtop import RawTopology
 from .pdb import PdbAtom
 from .sap import blur as sap_blur
+from .patches import find_patches, triangles_area
+from .ele_patches import color_surface_by_patch
 
 def main(args=None):
     print(f"surfscore starting at {datetime.datetime.now()}")
@@ -22,7 +25,8 @@ def main(args=None):
     parser.add_argument('parm')
     parser.add_argument('trajs', nargs='+')
     parser.add_argument('--ref', default=None)
-    parser.add_argument('--scale', required=True, help='Hydrophobicity scale in table format, or "crippen" or "eisenberg".')
+    parser.add_argument('--scale', required=True, help='Hydrophobicity scale in table format, or "crippen" or "eisenberg", or "rdkit-crippen".')
+    parser.add_argument('--mol2', type=str, help='Mol2 file for rdkit-crippen')
     parser.add_argument('--out', type=argparse.FileType('wb'), required=True, help='Output in .npz format')
     parser.add_argument('--stride', default=1, type=int)
     parser.add_argument('--surftype', choices=('normal', 'sc_norm', 'atom_norm'), default='normal')
@@ -54,6 +58,8 @@ def main(args=None):
     pot_parser.add_argument('--alpha', help='alpha parameter for Heiden weighting function [nm^-1]', default=15., type=float)
     pot_parser.add_argument('--blur_sigma', help='Sigma for distance to gaussian surface [nm]', default=.6, type=float)
     pot_parser.add_argument('--ply_out', help='Output .ply file of first frame for PyMOL')
+    pot_parser.add_argument('--patches', action='store_true', help='Output patches instead of hydrophobic potential')
+    pot_parser.add_argument('--patch_min', type=float, default=0.12, help='Minimum vertex value to count as a patch')
     parser.add_argument('-v', '--verbose', action='store_true')
     args = parser.parse_args(args)
 
@@ -82,8 +88,15 @@ def main(args=None):
     else:
         grouper = lambda x: x
         coords = traj.xyz
-    propensity_map = get_propensity_mapping(args.scale)
-    propensities = np.asarray(grouper([propensity_map(a) for a in atoms]))
+    if args.scale == 'rdkit-crippen':
+        if args.mol2 is None:
+            raise ValueError("--mol2 is needed with Scale 'rdkit-crippen'")
+        propensities = rdkit_crippen_logp(args.mol2)
+    else:
+        propensity_map = get_propensity_mapping(args.scale)
+        propensities = np.asarray(grouper([propensity_map(a) for a in atoms]))
+        if args.mol2 is not None:
+            warnings.warn("--mol2 specified but not used.")
     output = {}
     output['propensities'] = propensities
     if any((args.sap, args.surfscore)):
@@ -142,12 +155,47 @@ def main(args=None):
             'blurred_lvl': [s['blurred_lvl'] for s in surfs],
         }
         output['hydrophobic_potential'] = lists
+        if args.patches:
+            print(f'Starting patch output, patch_min={args.patch_min}')
+            patches = []
+            print('i_frame,i_patch,patch_size[nm^2]')
+            for i_frame, surf in enumerate(surfs):
+                area = triangles_area(surf.vertices[surf.faces])
+                pat = find_patches(surf.faces, surf['values'] > args.patch_min)
+                patches.append(pat)
+                for ip, p in enumerate(pat):
+                    size = area[p].sum()
+                    print(f"{i_frame},{ip},{size}")
         if args.ply_out:
             surf0 = surfs[0]
-            color_surface(surf0, 'values')
+            if args.patches:
+                color_surface_by_patch(surf0, patches[0])
+            else:
+                color_surface(surf0, 'values')
             surf0.write_ply(args.ply_out)
     np.savez(args.out, **output)
     args.out.close()
+
+def rdkit_crippen_logp(mol2):
+    import rdkit.Chem
+    mol = rdkit.Chem.MolFromMol2File(mol2, removeHs=False)
+    return np.array(pyMolLogP(mol))
+
+def pyMolLogP(inMol, patts=None, order=None, verbose=0, addHs=1):
+    """ Copied from DEPRECATED RDKit function _pyMolLogP, return all logP instead of the sum.
+    """
+    import rdkit.Chem
+    import rdkit.Chem.Crippen
+    if addHs < 0:
+        mol = rdkit.Chem.AddHs(inMol, 1)
+    elif addHs > 0:
+        mol = rdkit.Chem.AddHs(inMol, 0)
+    else:
+        mol = inMol
+    if patts is None:
+        order, patts = rdkit.Chem.Crippen._ReadPatts(rdkit.Chem.Crippen.defaultPatternFileName)
+    atomContribs = rdkit.Chem.Crippen._pyGetAtomContribs(mol, patts, order, verbose=verbose)
+    return [a[0] for a in atomContribs]
 
 def color_surface(surf, data, cmap='coolwarm'):
     norm = mpl.colors.CenteredNorm()

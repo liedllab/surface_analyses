@@ -32,7 +32,7 @@ def find_patches(faces, should_be_in_patch):
         not_in_patch[patch] = False
         patches.append(patch)
         n_in_patch += len(patch)
-    return sorted(patches, key=lambda patch: len(patch), reverse=True)
+    return sorted(patches, key=len, reverse=True)
 
 
 def find_connected_regions(faces, n_vertices=None):
