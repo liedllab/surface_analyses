@@ -9,7 +9,7 @@ setup(
     packages=['surface_analyses'],
     include_package_data=True,
     zip_safe=False,
-    install_requires=['numpy', 'scipy', 'pandas', 'scikit-image'],
+    install_requires=['numpy', 'scipy', 'pandas', 'scikit-image', 'gisttools'],
     setup_requires=['pytest_runner'],
     tests_require=['pytest'],
     py_modules=[
