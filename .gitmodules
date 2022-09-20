@@ -1,0 +1,9 @@
+[submodule "gisttools"]
+	path = gisttools
+	url = git@github.com:liedllab/gisttools.git
+[submodule "anarci_wrapper"]
+	path = anarci_wrapper
+	url = /media/storage_2_120T/fwa/code/anarci_wrapper/
+[submodule "TMalign_wrapper"]
+	path = TMalign_wrapper
+	url = /media/storage_2_120T/fwa/code/TMalign_wrapper/

@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 
+from datetime import datetime
+import os
+import pprint
+import sys
+
 import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
-import pprint
-import sys
-from datetime import datetime
 from skimage.measure import marching_cubes
 from gisttools.gist import load_dx
 from mdtraj.core.element import carbon, nitrogen, oxygen, sulfur
-import chothia.hmmsearch_wrapper as hmm
-import os
+import anarci_wrapper.annotation as annotate
+import matplotlib.cm
+
 from .patches import find_patches, triangles_area
 from .surface import Surface
 from .hydrophobic_potential import gaussian_grid_variable_sigma
-import matplotlib as mpl
 
 
 element_radii = {
@@ -24,13 +26,15 @@ element_radii = {
     sulfur: 1.8,
 }
 
-def main():
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('pdb', type=str)
     parser.add_argument('dx', type=str)
     parser.add_argument('--probe_radius', type=float, help='probe radius in Angstrom', default=1.4)
-    parser.add_argument('-o', '--out', default='-', type=argparse.FileType('w'), help='Output csv file.')
+    parser.add_argument('-o', '--out', default=sys.stdout, type=str, help='Output csv file.')
     parser.add_argument(
         '-c', '--patch_cutoff',
         type=float,
@@ -59,7 +63,7 @@ def main():
     )
     parser.add_argument('--gauss_shift', type=float, default=0.1)
     parser.add_argument('--gauss_scale', type=float, default=1.0)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     print(f'ele_patches.py, {datetime.now().strftime("%m/%d/%Y, %H:%M:%S")}\n')
     print('Command line arguments:')
@@ -76,7 +80,7 @@ def main():
 
     print('Run info:')
     pprint.pprint({
-        '#Atoms': pdb.xyz.shape[0],
+        '#Atoms': pdb.xyz.shape[1],
         'Grid dimensions': gist.grid.shape,
         **vars(args),
     })
@@ -113,7 +117,7 @@ def main():
     )
     verts += gist.grid.origin
 
-    cdrs = hmm.select_cdrs_from_trajectory(pdb, definition='chothia')
+    cdrs = annotate.Annotation.from_traj(pdb, scheme='chothia').cdr_indices()
     cdrs = set(cdrs)
     cdr_atoms = set(a.index for a in pdb.top.atoms if a.residue.index in cdrs)
 
@@ -173,12 +177,12 @@ def main():
         pos_surf.write_ply(args.ply_out + '-pos.ply')
 
         neg_surf = Surface(verts, faces)
-        color_surface_by_patch(pos_surf, neg_patches)
+        color_surface_by_patch(neg_surf, neg_patches)
         neg_surf.write_ply(args.ply_out + '-neg.ply')
     return
 
 def color_surface_by_patch(surf, patches, cmap='tab20c'):
-    cmap = mpl.cm.get_cmap(cmap)
+    cmap = matplotlib.cm.get_cmap(cmap)
     values = np.full(surf.n_vertices, len(patches))
     for i, patch in enumerate(patches):
         values[patch] = i
