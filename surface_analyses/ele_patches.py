@@ -11,12 +11,12 @@ from scipy.spatial import cKDTree
 from skimage.measure import marching_cubes
 from gisttools.gist import load_dx
 from mdtraj.core.element import carbon, nitrogen, oxygen, sulfur
-import anarci_wrapper.annotation as annotate
 import matplotlib.cm
 
 from .patches import find_patches, triangles_area
 from .surface import Surface
 from .hydrophobic_potential import gaussian_grid_variable_sigma
+from .anarci_wrapper.annotation import Annotation
 
 
 element_radii = {
@@ -117,7 +117,7 @@ def main(argv=None):
     )
     verts += gist.grid.origin
 
-    cdrs = annotate.Annotation.from_traj(pdb, scheme='chothia').cdr_indices()
+    cdrs = Annotation.from_traj(pdb, scheme='chothia').cdr_indices()
     cdrs = set(cdrs)
     cdr_atoms = set(a.index for a in pdb.top.atoms if a.residue.index in cdrs)
 

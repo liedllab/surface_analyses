@@ -9,7 +9,7 @@ setup(
     packages=["surface_analyses"],
     include_package_data=True,
     zip_safe=False,
-    install_requires=['numpy', 'scipy', 'pandas', 'scikit-image', 'gisttools @ git+https://github.com/liedllab/gisttools.git', 'plyfile', 'matplotlib', 'anarci_wrapper', 'TMalign_wrapper'],
+    install_requires=['numpy', 'scipy', 'pandas', 'scikit-image', 'gisttools @ git+https://github.com/liedllab/gisttools.git', 'plyfile', 'matplotlib', 'anarci @ git+https://github.com/oxpig/ANARCI', 'biopython'],
     setup_requires=['pytest_runner'],
     tests_require=['pytest'],
     py_modules=[
