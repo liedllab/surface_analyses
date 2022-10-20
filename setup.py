@@ -6,7 +6,7 @@ setup(
     description="Hydrophobicity analyses based on SASA",
     author="Franz Waibl",
     author_email="franz.waibl@uibk.ac.at",
-    packages=["surface_analyses"],
+    packages=["surface_analyses", "surface_analyses.anarci_wrapper"],
     include_package_data=True,
     zip_safe=False,
     install_requires=['numpy', 'scipy', 'pandas', 'scikit-image', 'gisttools @ git+https://github.com/liedllab/gisttools.git', 'plyfile', 'matplotlib', 'anarci @ git+https://github.com/oxpig/ANARCI', 'biopython'],
