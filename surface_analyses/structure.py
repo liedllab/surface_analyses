@@ -1,9 +1,9 @@
 from itertools import chain
 import mdtraj as md
 import numpy as np
-import TMalign_wrapper.io as tm
 
 from .data import AVERAGE_SIDECHAIN_SAA, ATOM_DATA
+from .tmalign_wrapper import MDTrajSequenceAlignment
 
 def load_aligned_trajectory(filenames, topname, stride, ref, sel):
     traj = load_trajectory(filenames, topname, stride, sel)
@@ -27,12 +27,8 @@ def align_trajectory(traj, reference: str):
     ref = md.load(reference)
     if any(r.name == 'HOH' for r in chain(traj.top.residues, ref.top.residues)):
         raise RuntimeError("water is left in the topologies")
-    alignment = tm.MDTrajSequenceAlignment.from_trajs(traj[0], ref, all_chains=True)
+    alignment = MDTrajSequenceAlignment.from_trajs(traj[0], ref, all_chains=True)
     return alignment.align(traj)
-    # return md.join(
-    #     tm.Alignment.from_mdtraj(frame, ref).transform_mdtraj(frame)
-    #     for frame in traj
-    # )
 
 
 def heavy_atom_grouper(atoms):
