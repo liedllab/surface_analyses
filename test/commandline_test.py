@@ -57,18 +57,39 @@ def test_output_consistent(trastuzumab_run):
         out = os.path.join(tmp, 'out.npz')
         run_commandline(parm7, rst7, scale, out, *args)
         with np.load(out, allow_pickle=True) as npz:
-            assert sorted(npz) == sorted(trastuzumab_run.expected_data)
-            for key in npz:
-                print(key)
-                if key == 'hydrophobic_potential':
-                    run_values = npz[key][()]
-                    expected = trastuzumab_run.expected_data[key][()]
-                    for k, v in run_values.items():
-                        np.testing.assert_allclose(v, expected[k])
-                elif len(np.asarray(npz[key]).shape) == 2:
-                    for i, (v1, v2) in enumerate(zip(npz[key][0], trastuzumab_run.expected_data[key][0])):
-                        assert (np.isnan(v1) and np.isnan(v2)) or v1 == pytest.approx(v2), (i, v1, v2)
-                else:
-                    for i, (v1, v2) in enumerate(zip(npz[key], trastuzumab_run.expected_data[key])):
-                        assert v1 == pytest.approx(v2), (i, v1, v2)
-                    # np.testing.assert_allclose(npz[key], trastuzumab_run.expected_data[key])
+            assert_outputs_equal(npz, trastuzumab_run.expected_data)
+
+
+def test_output_with_sc_norm():
+    scale = os.path.join(BASEPATH, 'glmnet.csv')
+    args = ['--surfscore', '--surftype', 'sc_norm']
+    parm7 = os.path.join(BASEPATH, 'input.parm7')
+    rst7 = os.path.join(BASEPATH, 'input.rst7')
+    expected_fname = os.path.join(BASEPATH, 'jain-surfscore-sc-norm.npz')
+    with np.load(expected_fname, allow_pickle=True) as npz:
+        expected = dict(npz)
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "out.npz")
+        run_commandline(parm7, rst7, scale, out, *args)
+        with np.load(out, allow_pickle=True) as npz:
+            assert_outputs_equal(npz, expected)
+
+
+def assert_outputs_equal(a, b):
+    """Given two dicts or npz files containing a surfscore output file, assert
+    that they are equal."""
+    assert sorted(a) == sorted(b)
+    for key in a:
+        print(key)
+        if key == 'hydrophobic_potential':
+            run_values = a[key][()]
+            expected = b[key][()]
+            for k, v in run_values.items():
+                np.testing.assert_allclose(v, expected[k])
+        elif len(np.asarray(a[key]).shape) == 2:
+            for i, (v1, v2) in enumerate(zip(a[key][0], b[key][0])):
+                assert (np.isnan(v1) and np.isnan(v2)) or v1 == pytest.approx(v2), (i, v1, v2)
+        else:
+            for i, (v1, v2) in enumerate(zip(a[key], b[key])):
+                assert v1 == pytest.approx(v2), (i, v1, v2)
+            # np.testing.assert_allclose(a[key], b[key])
