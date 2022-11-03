@@ -11,6 +11,8 @@ Notes
 """
 import plyfile
 import numpy as np
+import matplotlib.cm
+import matplotlib.colors
 
 PLY_DTYPES = {
     'i': 'i4',
@@ -87,3 +89,45 @@ class Surface:
     @classmethod
     def from_plydata(cls, plydata):
         pass
+
+
+def color_surface_by_patch(surf, patches, cmap='tab20c'):
+    """Given a list of patches, give each patch a color from the cmap.
+
+    Parameters
+    ----------
+    surf: Surface
+    patches: List[1D integer np.ndarray]
+        vertex indices per patch
+    cmap: matplotlib colormap
+        valid argument for matplotlib.cm.get_cmap
+    """
+    cmap = matplotlib.cm.get_cmap(cmap)
+    values = np.full(surf.n_vertices, len(patches))
+    for i, patch in enumerate(patches):
+        values[patch] = i
+    colors = cmap(values)[:, :3] * 256
+    not_in_patch = values == len(patches)
+    colors[not_in_patch] = 256
+    surf.set_color(*colors.T)
+
+
+def color_surface(surf, data, cmap='coolwarm'):
+    """Given values for each vertex, color surf using the cmap.
+
+    mpl.colors.CenteredNorm is used to scale the values, i.e., 0 will be in the
+    middle of the colormap.
+
+    Parameters
+    ----------
+    surf: Surface
+    data: np.ndarray, shape = (n_vertices,)
+        vertex values
+    cmap: matplotlib colormap
+        valid argument for matplotlib.cm.get_cmap
+    """
+    norm = matplotlib.colors.CenteredNorm()
+    cmap = matplotlib.cm.get_cmap(cmap)
+    values = norm(surf[data])
+    colors = cmap(values)[:, :3] * 256
+    surf.set_color(*colors.T)

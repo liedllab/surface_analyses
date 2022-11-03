@@ -2,8 +2,10 @@
 
 from datetime import datetime
 import os
+import pathlib
 import pprint
 import sys
+import subprocess
 
 import numpy as np
 import pandas as pd
@@ -11,10 +13,10 @@ from scipy.spatial import cKDTree
 from skimage.measure import marching_cubes
 from gisttools.gist import load_dx
 from mdtraj.core.element import carbon, nitrogen, oxygen, sulfur
-import matplotlib.cm
 
 from .patches import find_patches, triangles_area
 from .surface import Surface
+from .surface import color_surface, color_surface_by_patch
 from .hydrophobic_potential import gaussian_grid_variable_sigma
 from .anarci_wrapper.annotation import Annotation
 
@@ -32,7 +34,8 @@ def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('pdb', type=str)
-    parser.add_argument('dx', type=str)
+    parser.add_argument('dx', type=str, default=None, nargs='?')
+    parser.add_argument('--apbs_dir', type=str, default=None)
     parser.add_argument('--probe_radius', type=float, help='probe radius in Angstrom', default=1.4)
     parser.add_argument('-o', '--out', default=sys.stdout, type=str, help='Output csv file.')
     parser.add_argument(
@@ -69,9 +72,44 @@ def main(argv=None):
     print('Command line arguments:')
     print(' '.join(sys.argv))
 
-    gist = load_dx(args.dx, struct=args.pdb, strip_H=False)
-    basename = os.path.splitext(os.path.basename(args.dx))[0]
-    gist['E_dens'] = gist[basename]
+    if args.dx is None and args.apbs_dir is None:
+        raise ValueError("Either DX or APBS_DIR must be specified.")
+
+    if args.dx is not None and args.apbs_dir is not None:
+        print("Warning: both DX and APBS_DIR are specified. Will not run APBS "
+              "and use the dx file instead.")
+
+    if args.dx is not None:
+        dxfile = args.dx
+    else:
+        run_dir = pathlib.Path(args.apbs_dir)
+        if not run_dir.is_dir():
+            run_dir.mkdir()
+        link_target = os.path.relpath(args.pdb, run_dir.resolve())
+        linked_pdb = "input.pdb"
+        link_position = run_dir / linked_pdb
+        if link_position.exists():
+            link_position.unlink()
+        link_position.symlink_to(link_target)
+        pdb2pqr = run_pdb2pqr(linked_pdb, cwd=run_dir)
+        if pdb2pqr.returncode != 0:
+            print("Error: pdb2pqr failed:")
+            print("pdb2pqr stdout:")
+            print(pdb2pqr.stdout)
+            print("pdb2pqr stderr:")
+            print(pdb2pqr.stderr)
+            raise RuntimeError("pdb2pqr failed")
+        apbs = run_apbs("apbs.in", cwd=run_dir)
+        if apbs.returncode != 0:
+            print("Error: apbs failed")
+            print("apbs stdout:")
+            print(apbs.stdout)
+            print("apbs stderr:")
+            print(apbs.stderr)
+            raise RuntimeError("apbs failed")
+        dxfile = str(run_dir / "apbs.pqr-PE0.dx")
+    gist = load_dx(dxfile, struct=args.pdb, strip_H=False, colname='DX')
+    gist['E_dens'] = gist['DX']
     
     pdb = gist.struct
     # *10 because mdtraj calculates stuff in nanometers instead of Angstrom.
@@ -179,17 +217,32 @@ def main(argv=None):
         neg_surf = Surface(verts, faces)
         color_surface_by_patch(neg_surf, neg_patches)
         neg_surf.write_ply(args.ply_out + '-neg.ply')
+
+        potential_surf = Surface(verts, faces)
+        potential_surf['values'] = values
+        color_surface(potential_surf, 'values')
+        potential_surf.write_ply(args.ply_out + '-potential.ply')
     return
 
-def color_surface_by_patch(surf, patches, cmap='tab20c'):
-    cmap = matplotlib.cm.get_cmap(cmap)
-    values = np.full(surf.n_vertices, len(patches))
-    for i, patch in enumerate(patches):
-        values[patch] = i
-    colors = cmap(values)[:, :3] * 256
-    not_in_patch = values == len(patches)
-    colors[not_in_patch] = 256
-    surf.set_color(*colors.T)
+
+def run_pdb2pqr(pdbfile, cwd=".", ff="amber", name_base="apbs"):
+    if not isinstance(cwd, pathlib.Path):
+        cwd = pathlib.Path(cwd)
+    process = subprocess.run(
+        ["pdb2pqr", f"--ff={ff}", pdbfile, name_base + ".pqr", "--apbs-input"],
+        capture_output=True,
+        cwd=cwd,
+    )
+    return process
+
+
+def run_apbs(inputfile, cwd="."):
+    process = subprocess.run(
+        ["apbs", inputfile],
+        capture_output=True,
+        cwd=cwd,
+    )
+    return process
 
 
 def check_cdr_patch(pdbtree, cdr_atoms, patch_verts):

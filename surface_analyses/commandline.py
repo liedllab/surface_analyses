@@ -5,7 +5,6 @@ import warnings
 
 import mdtraj as md
 import numpy as np
-import matplotlib as mpl
 
 from .hydrophobic_potential import hydrophobic_potential
 from .structure import load_aligned_trajectory, heavy_atom_grouper, saa_ref
@@ -14,7 +13,7 @@ from .prmtop import RawTopology
 from .pdb import PdbAtom
 from .sap import blur as sap_blur
 from .patches import find_patches, triangles_area
-from .ele_patches import color_surface_by_patch
+from .surface import color_surface_by_patch, color_surface
 
 def main(args=None):
     print(f"surfscore starting at {datetime.datetime.now()}")
@@ -197,12 +196,6 @@ def pyMolLogP(inMol, patts=None, order=None, verbose=0, addHs=1):
     atomContribs = rdkit.Chem.Crippen._pyGetAtomContribs(mol, patts, order, verbose=verbose)
     return [a[0] for a in atomContribs]
 
-def color_surface(surf, data, cmap='coolwarm'):
-    norm = mpl.colors.CenteredNorm()
-    cmap = mpl.cm.get_cmap(cmap)
-    values = norm(surf[data])
-    colors = cmap(values)[:, :3] * 256
-    surf.set_color(*colors.T)
 
 def get_atoms_list(fname):
     if fname.endswith('.parm7'):
