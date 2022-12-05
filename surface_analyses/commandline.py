@@ -26,7 +26,7 @@ def main(args=None):
     parser.add_argument('trajs', nargs='+')
     parser.add_argument('--ref', default=None)
     parser.add_argument('--scale', required=True, help='Hydrophobicity scale in table format, or "crippen" or "eisenberg", or "rdkit-crippen".')
-    parser.add_argument('--mol2', type=str, help='Mol2 file for rdkit-crippen')
+    parser.add_argument('--smiles', type=str, help='SMILES for rdkit-crippen. Use e.g. @smiles.txt to read them from a file.')
     parser.add_argument('--out', type=argparse.FileType('wb'), required=True, help='Output in .npz format')
     parser.add_argument('--stride', default=1, type=int)
     parser.add_argument('--surftype', choices=('normal', 'sc_norm', 'atom_norm'), default='normal')
@@ -89,14 +89,14 @@ def main(args=None):
         grouper = lambda x: x
         coords = traj.xyz
     if args.scale == 'rdkit-crippen':
-        if args.mol2 is None:
-            raise ValueError("--mol2 is needed with Scale 'rdkit-crippen'")
-        propensities = rdkit_crippen_logp(args.mol2)
+        if args.smiles is None:
+            raise ValueError("--smiles is needed with Scale 'rdkit-crippen'")
+        propensities = rdkit_crippen_logp(args.parm, args.smiles)
     else:
         propensity_map = get_propensity_mapping(args.scale)
         propensities = np.asarray(grouper([propensity_map(a) for a in atoms]))
-        if args.mol2 is not None:
-            warnings.warn("--mol2 specified but not used.")
+        if args.smiles is not None:
+            warnings.warn("--smiles specified but not used.")
     output = {}
     output['propensities'] = propensities
     if any((args.sap, args.surfscore)):
@@ -176,26 +176,14 @@ def main(args=None):
     np.savez(args.out, **output)
     args.out.close()
 
-def rdkit_crippen_logp(mol2):
-    import rdkit.Chem
-    mol = rdkit.Chem.MolFromMol2File(mol2, removeHs=False)
-    return np.array(pyMolLogP(mol))
-
-def pyMolLogP(inMol, patts=None, order=None, verbose=0, addHs=1):
-    """ Copied from DEPRECATED RDKit function _pyMolLogP, return all logP instead of the sum.
-    """
-    import rdkit.Chem
+def rdkit_crippen_logp(pdb, smiles):
+    import rdkit.Chem.AllChem
     import rdkit.Chem.Crippen
-    if addHs < 0:
-        mol = rdkit.Chem.AddHs(inMol, 1)
-    elif addHs > 0:
-        mol = rdkit.Chem.AddHs(inMol, 0)
-    else:
-        mol = inMol
-    if patts is None:
-        order, patts = rdkit.Chem.Crippen._ReadPatts(rdkit.Chem.Crippen.defaultPatternFileName)
-    atomContribs = rdkit.Chem.Crippen._pyGetAtomContribs(mol, patts, order, verbose=verbose)
-    return [a[0] for a in atomContribs]
+    mol = rdkit.Chem.MolFromPDBFile(pdb, removeHs=False)
+    ref = rdkit.Chem.MolFromSmiles(smiles)
+    mol = rdkit.Chem.AllChem.AssignBondOrdersFromTemplate(ref, mol)
+    params = rdkit.Chem.Crippen._GetAtomContribs(mol, force=1)
+    return np.array([p[0] for p in params])
 
 def color_surface(surf, data, cmap='coolwarm'):
     norm = mpl.colors.CenteredNorm()
