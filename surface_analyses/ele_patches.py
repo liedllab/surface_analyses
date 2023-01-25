@@ -17,7 +17,7 @@ from mdtraj.core.element import carbon, nitrogen, oxygen, sulfur
 from .patches import find_patches, triangles_area
 from .surface import Surface
 from .surface import color_surface, color_surface_by_patch
-from .hydrophobic_potential import gaussian_grid_variable_sigma
+from .surface import gaussian_grid_variable_sigma
 from .anarci_wrapper.annotation import Annotation
 
 

@@ -23,11 +23,10 @@ def get_propensity_mapping(scale):
 def load_scale(fname):
     scale = pd.read_csv(
         fname,
-        squeeze=True,
         names=['residue', 'propensity'],
         skiprows=1,
         index_col='residue',
-    )
+    )['propensity']
     assert isinstance(scale, pd.Series), 'Scale needs to be a 2-column csv.'
     assert not scale.index.has_duplicates, 'Duplicate keys in scale.'
     return scale

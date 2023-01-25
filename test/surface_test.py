@@ -1,3 +1,4 @@
+from gisttools.grid import Grid
 import pytest
 import numpy as np
 
@@ -29,3 +30,8 @@ def test_quantile_skipping_centered_norm():
     norm.autoscale(np.arange(-4, 12))
     assert norm.vmax == 10
     assert norm.vmin == -10
+
+def test_gaussian_grid_variable_sigma():
+    grid = Grid([-1, 0, 0], [3, 1, 1], 1)
+    out = surf.gaussian_grid_variable_sigma(grid, [[-0.5, 0, 0]], [0.3], [2])
+    assert np.allclose(out.ravel(), np.exp([-0.5**2/2/0.3**2, -0.5**2/2/0.3**2, -1.5**2/2/0.3**2]))
