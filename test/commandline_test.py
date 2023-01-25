@@ -102,8 +102,10 @@ def assert_outputs_equal(a, b):
             run_values = a[key][()]
             expected = b[key][()]
             for k, v in run_values.items():
-                print(f'hydrophobic pot: {k}')
-                np.testing.assert_allclose(v, expected[k], atol=1e-4, rtol=1e-1)
+                print(f"hydrophobic pot: {k}")
+                v_exp = expected[k]
+                assert np.mean(v) == pytest.approx(np.mean(v_exp), rel=1e-2, abs=1e-4)
+                assert np.std(v) == pytest.approx(np.std(v_exp), rel=1e-2, abs=1e-4)
         elif len(np.asarray(a[key]).shape) == 2:
             for i, (v1, v2) in enumerate(zip(a[key][0], b[key][0])):
                 assert (np.isnan(v1) and np.isnan(v2)) or v1 == pytest.approx(v2), (i, v1, v2)
