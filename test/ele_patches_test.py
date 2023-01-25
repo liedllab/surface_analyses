@@ -21,11 +21,11 @@ def run_commandline(pdb, dx, *args, surface_type="sas"):
 def test_trastuzumab_sas_integrals():
     expected = np.array(
         [
-            36995.48182497808,
-            12687.889256627339,
-            42026.96598880616,
-            -5031.484163828075,
-            -1867.6586109058192,
+            22575.20631872,
+            12389.29284473,
+            27131.66874305,
+            -4556.46242433,
+            -1867.35195722,
         ]
     )
     out_lines = run_commandline(

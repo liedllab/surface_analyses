@@ -123,6 +123,7 @@ def main(argv=None):
             print("pdb2pqr stderr:")
             print(pdb2pqr.stderr)
             raise RuntimeError("pdb2pqr failed")
+        add_ions_to_apbs_input(run_dir / "apbs.in")
         apbs = run_apbs("apbs.in", cwd=run_dir)
         if apbs.returncode != 0:
             print("Error: apbs failed")
@@ -225,7 +226,9 @@ def main(argv=None):
     patches.to_csv(args.out)
 
     # Compute the total solvent-accessible potential.
-    accessible = full_distances > 0
+    within_range, _, _ = gist.distance_to_spheres(rmax=10)
+    not_protein = full_distances > 0
+    accessible = within_range[not_protein[within_range]]
     voxel_volume = gist.grid.voxel_volume
     accessible_data = gist[columns[0]].values[accessible]
     integral = np.sum(accessible_data) * voxel_volume
@@ -270,6 +273,17 @@ def run_apbs(inputfile, cwd="."):
         cwd=cwd,
     )
     return process
+
+
+def add_ions_to_apbs_input(fname):
+    with open(fname) as f:
+        inp = list(f)
+    with open(fname, 'w') as f:
+        for line in inp:
+            f.write(line)
+            if line.strip().startswith('temp'):
+                print("    ion charge 1.0 conc 0.1 radius 2.0", file=f)
+                print("    ion charge -1.0 conc 0.1 radius 2.0", file=f)
 
 
 def check_cdr_patch(pdbtree, cdr_atoms, patch_verts):
