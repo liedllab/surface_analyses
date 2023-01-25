@@ -39,6 +39,7 @@ def test_output_consistent(trastuzumab_run):
     parm7 = os.path.join(BASEPATH, 'input.parm7')
     rst7 = os.path.join(BASEPATH, 'input.rst7')
     ref = os.path.join(BASEPATH, '1f4w-standard-orientation.pdb')
+    print(f'{runtype=}')
     if runtype == 'direct':
         args = ['--surfscore']
     elif runtype == 'sap':
@@ -85,6 +86,7 @@ def assert_outputs_equal(a, b):
             run_values = a[key][()]
             expected = b[key][()]
             for k, v in run_values.items():
+                print(f'hydrophobic pot: {k}')
                 np.testing.assert_allclose(v, expected[k])
         elif len(np.asarray(a[key]).shape) == 2:
             for i, (v1, v2) in enumerate(zip(a[key][0], b[key][0])):

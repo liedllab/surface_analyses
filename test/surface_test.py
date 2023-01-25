@@ -16,10 +16,16 @@ def test_repr_no_error(minimal):
     repr(minimal)
 
 def test_convert_to_ply(minimal):
-    plydat = minimal.as_plydata(nanometers_per_length_unit=1.)
+    plydat = minimal.as_plydata(units_per_angstrom=1.)
     assert len(plydat['vertex']) == minimal.n_vertices
     for i_dim, dim in enumerate('xyz'):
         assert np.allclose(plydat['vertex'][dim], minimal.vertices[:, i_dim])
 
 def test_write_ply(minimal):
     minimal.write_ply('test.ply')
+
+def test_quantile_skipping_centered_norm():
+    norm = surf.QuantileSkippingCenteredNorm(clip_fraction=0.1)
+    norm.autoscale(np.arange(-4, 12))
+    assert norm.vmax == 10
+    assert norm.vmin == -10

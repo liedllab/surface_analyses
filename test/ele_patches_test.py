@@ -14,7 +14,7 @@ import pytest
 def run_commandline(pdb, dx, *args, surface_type="sas"):
     output = io.StringIO()
     with redirect_stdout(output):
-        main([pdb, dx, "--surface_type", surface_type] + list(args))
+        main([pdb, dx, "--surface_type", surface_type, '--check_cdrs'] + list(args))
     return output.getvalue()
 
 

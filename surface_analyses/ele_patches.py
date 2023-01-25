@@ -34,8 +34,8 @@ def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('pdb', type=str)
-    parser.add_argument('dx', type=str, default=None, nargs='?')
-    parser.add_argument('--apbs_dir', type=str, default=None)
+    parser.add_argument('dx', type=str, default=None, nargs='?', help="Optional dx file with the electrostatic potential. If this is omitted, you must specify --apbs_dir")
+    parser.add_argument('--apbs_dir', help="Directory in which intermediate files are stored when running APBS. Will be created if it does not exist.", type=str, default=None)
     parser.add_argument('--probe_radius', type=float, help='probe radius in Angstrom', default=1.4)
     parser.add_argument('-o', '--out', default=sys.stdout, type=str, help='Output csv file.')
     parser.add_argument(
@@ -63,6 +63,30 @@ def main(argv=None):
         '--ply_out',
         type=str,
         help='Base name for .ply output for PyMOL. Will write BASE-pos.ply and BASE-neg.ply.',
+    )
+    parser.add_argument(
+        '--patch_cmap',
+        type=str,
+        default='tab20c',
+        help='Matplotlib colormap for .ply patches output.',
+    )
+    parser.add_argument(
+        '--ply_cmap',
+        type=str,
+        default='coolwarm_r',
+        help='Matplotlib colormap for .ply potential output.',
+    )
+    parser.add_argument(
+        '--ply_clim',
+        type=str,
+        default=None,
+        help='Colorscale limits for .ply output.',
+        nargs=2,
+    )
+    parser.add_argument(
+        '--check_cdrs',
+        action='store_true',
+        help='For an antibody Fv region as input: check whether patches belong to CDRs.',
     )
     parser.add_argument('--gauss_shift', type=float, default=0.1)
     parser.add_argument('--gauss_scale', type=float, default=1.0)
@@ -155,9 +179,12 @@ def main(argv=None):
     )
     verts += gist.grid.origin
 
-    cdrs = Annotation.from_traj(pdb, scheme='chothia').cdr_indices()
-    cdrs = set(cdrs)
-    cdr_atoms = set(a.index for a in pdb.top.atoms if a.residue.index in cdrs)
+    if args.check_cdrs:
+        cdrs = Annotation.from_traj(pdb, scheme='chothia').cdr_indices()
+        cdrs = set(cdrs)
+        cdr_atoms = set(a.index for a in pdb.top.atoms if a.residue.index in cdrs)
+    else:
+        cdr_atoms = set()
 
     pdbtree = cKDTree(pdb.xyz[0] * 10.)
 
@@ -211,16 +238,16 @@ def main(argv=None):
 
     if args.ply_out:
         pos_surf = Surface(verts, faces)
-        color_surface_by_patch(pos_surf, pos_patches)
+        color_surface_by_patch(pos_surf, pos_patches, cmap=args.patch_cmap)
         pos_surf.write_ply(args.ply_out + '-pos.ply')
 
         neg_surf = Surface(verts, faces)
-        color_surface_by_patch(neg_surf, neg_patches)
+        color_surface_by_patch(neg_surf, neg_patches, cmap=args.patch_cmap)
         neg_surf.write_ply(args.ply_out + '-neg.ply')
 
         potential_surf = Surface(verts, faces)
         potential_surf['values'] = values
-        color_surface(potential_surf, 'values')
+        color_surface(potential_surf, 'values', cmap=args.ply_cmap, clim=args.ply_clim)
         potential_surf.write_ply(args.ply_out + '-potential.ply')
     return
 

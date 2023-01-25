@@ -22,6 +22,14 @@ PLY_DTYPES = {
 
 class Surface:
     def __init__(self, verts, faces):
+        """
+        Parameters
+        ----------
+        verts: np.ndarray, shape=(n_verts, 3)
+            vertices in Angstrom. Will be converted to nm, when writing a ply file.
+        faces: np.ndarray, shape=(n_verts, 3)
+            Triangles defined as 3 integer indices for verts.
+        """
         self.vertices = np.atleast_2d(verts)
         self.faces = np.atleast_2d(faces)
         assert len(self.vertices.shape) == 2 and self.vertices.shape[-1] == 3
@@ -58,7 +66,12 @@ class Surface:
     def __repr__(self):
         return f"{self.__class__.__name__}({self.n_vertices} vertices, {self.n_faces} faces)"
 
-    def as_plydata(self, text=True, nanometers_per_length_unit=0.1):
+    def as_plydata(self, text=True, units_per_angstrom=0.01):
+        """Convert to a plyfile.PlyData object, while scaling coordinates
+
+        the default scaling units_per_angstrom=0.01 matches the PyMol CGO
+        scaling factor of 1:100.
+        """
         vertex_dtype = [('x', 'f4'), ('y', 'f4'), ('z', 'f4')]
         keys = list(self.data.keys())
         for k in keys:
@@ -68,7 +81,7 @@ class Surface:
             vertex_dtype.append((k, PLY_DTYPES[dtype.kind]))
         vertex_data = []
         for i in range(self.n_vertices):
-            vert = list(self.vertices[i] * nanometers_per_length_unit)
+            vert = list(self.vertices[i] * units_per_angstrom)
             for k in keys:
                 vert.append(self.data[k][i])
             vertex_data.append(tuple(vert))
@@ -112,7 +125,7 @@ def color_surface_by_patch(surf, patches, cmap='tab20c'):
     surf.set_color(*colors.T)
 
 
-def color_surface(surf, data, cmap='coolwarm'):
+def color_surface(surf, data, cmap='coolwarm_r', clip_fraction=0.1, clim=None):
     """Given values for each vertex, color surf using the cmap.
 
     mpl.colors.CenteredNorm is used to scale the values, i.e., 0 will be in the
@@ -125,9 +138,41 @@ def color_surface(surf, data, cmap='coolwarm'):
         vertex values
     cmap: matplotlib colormap
         valid argument for matplotlib.cm.get_cmap
+    clip_fraction: float
+        fraction (quantile) of the datapoints that should be clipped in the
+        color output. If clim is given, this is ignored.
+    clim: None or tuple of length 2
+        minimum and maximum of the color range.
     """
-    norm = matplotlib.colors.CenteredNorm()
+    if clim is None:
+        norm = QuantileSkippingCenteredNorm(clip_fraction=clip_fraction)
+    else:
+        vmin, vmax = clim
+        norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
     cmap = matplotlib.cm.get_cmap(cmap)
     values = norm(surf[data])
     colors = cmap(values)[:, :3] * 256
     surf.set_color(*colors.T)
+
+
+class QuantileSkippingCenteredNorm(matplotlib.colors.CenteredNorm):
+
+    def __init__(self, vcenter=0, halfrange=None, clip=False, clip_fraction=0.1):
+        super().__init__(vcenter=vcenter, halfrange=halfrange, clip=clip)
+        if clip_fraction >= 1 or clip_fraction < 0:
+            raise ValueError("clip_fraction must be >= 0 and < 1")
+        self.clip_fraction = clip_fraction
+
+    def autoscale(self, A):
+        """
+        Scale so that, in one direction, clip_fraction is the fraction of data
+        outside of self._halfrange
+        """
+        A = np.asanyarray(A)
+        above = A[A > self._vcenter]
+        below = A[A < self._vcenter]
+        qlower = np.quantile(below, self.clip_fraction)
+        qhigher = np.quantile(above, 1 - self.clip_fraction)
+        self._halfrange = max(self._vcenter-qlower,
+                              qhigher-self._vcenter)
+        self._set_vmin_vmax()

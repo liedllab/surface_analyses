@@ -13,7 +13,18 @@ from surface_analyses.prmtop import RawTopology
 
 TripeptideFiles = namedtuple('TripeptideFiles', 'name pdb parm7 rst7')
 
+def has_tleap():
+    try:
+        proc = subprocess.run(['tleap', '-h'])
+    except FileNotFoundError:
+        return False
+    if proc.returncode != 0:
+        return False
+    return True
+
 def get_tripeptide_files(aa, tmp):
+    if not has_tleap():
+        pytest.skip("tleap not found, or not running successfully")
     leapfile = os.path.join(tmp, 'leap.in')
     pdbfile = os.path.join(tmp, 'tri.pdb')
     parmfile = os.path.join(tmp, 'tri.parm7')
