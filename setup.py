@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name="Surface analyses",
@@ -6,10 +6,10 @@ setup(
     description="Hydrophobicity analyses based on SASA",
     author="Franz Waibl",
     author_email="franz.waibl@uibk.ac.at",
-    packages=['surface_analyses'],
+    packages=["surface_analyses", "surface_analyses.anarci_wrapper"],
     include_package_data=True,
     zip_safe=False,
-    install_requires=['numpy', 'scipy', 'pandas', 'scikit-image'],
+    install_requires=['numpy', 'scipy', 'pandas', 'scikit-image', 'gisttools @ git+https://github.com/liedllab/gisttools.git', 'plyfile', 'matplotlib', 'anarci @ git+https://github.com/oxpig/ANARCI', 'biopython'],
     setup_requires=['pytest_runner'],
     tests_require=['pytest'],
     py_modules=[
@@ -18,8 +18,12 @@ setup(
         "surface_analyses.propensities",
         "surface_analyses.hydrophobic_potential",
         "surface_analyses.pdb",
+        "surface_analyses.ele_patches",
     ],
     entry_points={
-        'console_scripts': ['surfscore=surface_analyses.commandline:main'],
+        'console_scripts': [
+            'surfscore=surface_analyses.commandline:main',
+            'ele_patches=surface_analyses.ele_patches:main',
+        ],
     },
 )
