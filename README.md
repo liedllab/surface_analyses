@@ -25,6 +25,11 @@ normal input. The mol2 file must have correct bond orders and the same order of
 atoms as the topology! If no such mol2 file is available, you can use the
 `reorder_mol2.sh` script in the `extra-scripts` subdirectory.
 
+# Computing electrostatic surfaces
+The `ele_patches` script can use APBS () to compute an electrostatic potential.
+It then creates a molecular surface and colors it by the potential, or searches
+for positive and negative surface patches.
+
 # Examples
 Visualize the hydrophobic potential on a non-protein molecule, using an
 *ordered* mol2 file as reference:
