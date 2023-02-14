@@ -28,5 +28,6 @@ atoms as the topology! If no such mol2 file is available, you can use the
 # Examples
 Visualize the hydrophobic potential on a non-protein molecule, using an
 *ordered* mol2 file as reference:
-```surfscore PARM CRD --scale rdkit-crippen --mol2 ORDERED_MOL2FILE --out OUT.npz --ply_out $OUT.ply --potential --patches
+```
+surfscore PARM CRD --scale rdkit-crippen --mol2 ORDERED_MOL2FILE --out OUT.npz --ply_out $OUT.ply --potential --patches
 ```
