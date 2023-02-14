@@ -26,7 +26,7 @@ atoms as the topology! If no such mol2 file is available, you can use the
 `reorder_mol2.sh` script in the `extra-scripts` subdirectory.
 
 # Computing electrostatic surfaces
-The `ele_patches` script can use APBS () to compute an electrostatic potential.
+The `ele_patches` script can use APBS (https://github.com/Electrostatics/apbs) to compute an electrostatic potential.
 It then creates a molecular surface and colors it by the potential, or searches
 for positive and negative surface patches.
 
