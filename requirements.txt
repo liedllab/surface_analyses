@@ -1,0 +1,9 @@
+numpy
+scipy
+pandas
+scikit-image
+git+https://github.com/liedllab/gisttools.git
+plyfile
+matplotlib
+git+https://github.com/oxpig/ANARCI
+biopython
