@@ -2,17 +2,6 @@
 Once all the dependencies are installed, `surface_analyses` can be installed
 using `pip install .`.
 
-However, there are some dependencies which are not on PyPI: `gisttools` is
-automatically installed from GitHub. `anarci_wrapper` and `TMalign_wrapper` are
-included as git submodules. You have to install them manually using pip.
-
-Installation might look like this:
-
-```pip install anarci_wrapper/
-pip install TMalign_wrapper/
-pip install .
-```
-
 # Assigning hydrophobicity values
 The `surfscore` script can use hydrophobicity scales to assign hydrophobicity
 to proteins. Additionally, the `eisenberg` and `crippen` scales are
