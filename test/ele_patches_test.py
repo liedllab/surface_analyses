@@ -6,6 +6,7 @@ from contextlib import redirect_stdout
 import io
 from pathlib import Path
 import os
+import shutil
 
 import pandas as pd
 from pandas.testing import assert_frame_equal
@@ -20,11 +21,16 @@ TRASTUZUMAB_PATH = TESTS_PATH / 'trastuzumab'
 def run_commandline(pdb, dx, *args, surface_type="sas"):
     output = io.StringIO()
     with redirect_stdout(output):
-        main([str(pdb), str(dx), "--surface_type", surface_type, '--check_cdrs'] + list(args))
+        main([str(pdb), str(dx), "--surface_type", surface_type] + list(args))
     return output.getvalue()
 
 
-def test_trastuzumab_sas_integrals():
+@pytest.fixture(params=['with', 'without'])
+def with_or_without_cdrs(request):
+    yield request.param
+
+
+def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     expected = np.array(
         [
             22575.20631872,
@@ -34,16 +40,23 @@ def test_trastuzumab_sas_integrals():
             -1867.35195722,
         ]
     )
-    out_lines = run_commandline(
-        TRASTUZUMAB_PATH / "apbs-input.pdb",
-        TRASTUZUMAB_PATH / "apbs-potential.dx",
+    args = [
+        TRASTUZUMAB_PATH / 'apbs-input.pdb',
+        TRASTUZUMAB_PATH / 'apbs-potential.dx',
         '--out',
         str(TRASTUZUMAB_PATH / 'apbs-patches.csv'),
-        surface_type="sas",
-    )
+    ]
+    kwargs = {'surface_type': 'sas'}
+    if with_or_without_cdrs == 'with':
+        if shutil.which('hmmscan') is None:
+            pytest.skip('hmmscan was not found')
+        args.append('--check_crds')
+    out_lines = run_commandline(*args, **kwargs)
     last = out_lines.splitlines()[-1]
     integrals = np.array([float(x) for x in last.split()])
     assert np.allclose(expected, integrals)
     patches = pd.read_csv(str(TRASTUZUMAB_PATH / 'apbs-patches.csv'))
     expected_patches = pd.read_csv(str(TRASTUZUMAB_PATH / 'apbs-patches.save'))
+    if with_or_without_cdrs == 'without':
+        expected_patches['cdr'] = False
     assert_frame_equal(patches, expected_patches)
