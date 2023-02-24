@@ -7,3 +7,4 @@ plyfile
 matplotlib
 git+https://github.com/oxpig/ANARCI
 biopython
+rdkit

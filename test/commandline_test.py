@@ -3,6 +3,7 @@
 from collections import namedtuple
 from pathlib import Path
 import os.path
+import shutil
 import tempfile
 
 import pytest
@@ -39,6 +40,8 @@ def run_commandline(parm, traj, scale, outfile, *args):
 
 def test_output_consistent(trastuzumab_run):
     runtype = trastuzumab_run.method
+    if runtype == 'potential' and shutil.which('TMalign') is None:
+        pytest.skip('TMalign was not found')
     scale = trastuzumab_run.scale
     parm7 = TRASTUZUMAB_PATH / 'input.parm7'
     rst7 = TRASTUZUMAB_PATH / 'input.rst7'
@@ -56,8 +59,7 @@ def test_output_consistent(trastuzumab_run):
         args = ['--sh']
     else:
         raise ValueError(runtype)
-    # tmp = f'test/tmp/{runtype}_{scale}'
-    # os.mkdir(tmp)
+
     if scale == 'wimley-white':
         scale = TRASTUZUMAB_PATH / 'wimley-white-scaled.csv'
     with tempfile.TemporaryDirectory() as tmp:
@@ -107,9 +109,8 @@ def assert_outputs_equal(a, b):
                 assert np.mean(v) == pytest.approx(np.mean(v_exp), rel=1e-2, abs=1e-4)
                 assert np.std(v) == pytest.approx(np.std(v_exp), rel=1e-2, abs=1e-4)
         elif len(np.asarray(a[key]).shape) == 2:
-            for i, (v1, v2) in enumerate(zip(a[key][0], b[key][0])):
-                assert (np.isnan(v1) and np.isnan(v2)) or v1 == pytest.approx(v2), (i, v1, v2)
+            for frame in range(len(a[key])):
+                np.testing.assert_allclose(a[key][frame], b[key][frame])
         else:
             for i, (v1, v2) in enumerate(zip(a[key], b[key])):
                 assert v1 == pytest.approx(v2), (i, v1, v2)
-            # np.testing.assert_allclose(a[key], b[key])
