@@ -10,14 +10,13 @@ import subprocess
 import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
-from skimage.measure import marching_cubes
 from gisttools.gist import load_dx
 from mdtraj.core.element import carbon, nitrogen, oxygen, sulfur
 
 from .patches import find_patches, triangles_area
 from .surface import Surface
 from .surface import color_surface, color_surface_by_patch
-from .surface import gaussian_grid_variable_sigma
+from .surface import compute_sas, compute_ses, compute_gauss_surf
 from .anarci_wrapper.annotation import Annotation
 
 
@@ -55,9 +54,9 @@ def main(argv=None):
     parser.add_argument(
         '--surface_type',
         type=str,
-        choices=('sas', 'gauss'),
+        choices=('sas', 'ses', 'gauss'),
         default='sas',
-        help='Whch type of molecular surface to produce.'
+        help='Which type of molecular surface to produce.'
     )
     parser.add_argument(
         '--ply_out',
@@ -151,34 +150,13 @@ def main(argv=None):
     print('Calculating triangulated SASA')
 
     if args.surface_type == 'sas':
-        full_distances = np.full(gist.grid.size, 10000.)  # Arbitrarily high number.
-        ind, closest, dist = gist.distance_to_spheres(rmax=5., atomic_radii=radii)
-        full_distances[ind] = dist
-        # rescale the distances such that they are compatible with Gaussian surface.
-        # higher distance outside, border at 0
-        full_distances -= args.probe_radius
+        surf = compute_sas(gist.grid, gist.coord, radii, args.probe_radius)
+    elif args.surface_type == 'gauss':
+        surf = compute_gauss_surf(gist.grid, gist.coord, radii, args.gauss_shift, args.gauss_scale)
+    elif args.surface_type == 'ses':
+        surf = compute_ses(gist.grid, gist.coord, radii, args.probe_radius)
     else:
-        assert args.surface_type == 'gauss'
-        full_distances = gaussian_grid_variable_sigma(
-            gist.grid,
-            gist.coord,
-            radii * args.gauss_scale,
-            np.full(len(gist.coord), 5.),
-        ).ravel()
-        # rescale the distances such that they are compatible with SAS.
-        # higher distance outside, border at 0
-        full_distances -= args.gauss_shift
-        full_distances *= -1
-
-    # Create a triangulated SASA.
-    verts, faces, normals, values = marching_cubes(
-        full_distances.reshape(gist.grid.shape),
-        spacing=gist.grid.delta,
-        level=0,
-        gradient_direction='descent',
-        allow_degenerate=False,
-    )
-    verts += gist.grid.origin
+        raise ValueError("Unknown surface type: " + str(args.surface_type))
 
     if args.check_cdrs:
         cdrs = Annotation.from_traj(pdb, scheme='chothia').cdr_indices()
@@ -191,17 +169,17 @@ def main(argv=None):
 
     # The patch searching
     print('Finding patches')
-    values = gist.interpolate(columns, verts)[columns[0]]
-    pos_patches = find_patches(faces, values > args.patch_cutoff[0])
+    values = gist.interpolate(columns, surf.vertices)[columns[0]]
+    pos_patches = find_patches(surf.faces, values > args.patch_cutoff[0])
     pos_patches = sorted(pos_patches, key=len, reverse=True)
 
-    neg_patches = find_patches(faces, values < args.patch_cutoff[1])
+    neg_patches = find_patches(surf.faces, values < args.patch_cutoff[1])
     neg_patches = sorted(neg_patches, key=len, reverse=True)
 
     # Calculate the area of each triangle, and split evenly among the vertices.
-    tri_areas = triangles_area(verts[faces])
-    vert_areas = np.zeros(verts.shape[0])
-    for face, area in zip(faces, tri_areas):
+    tri_areas = triangles_area(surf.vertices[surf.faces])
+    vert_areas = np.zeros(surf.vertices.shape[0])
+    for face, area in zip(surf.faces, tri_areas):
         vert_areas[face] += area/3
 
     # Put the patches into a DataFrame
@@ -212,7 +190,7 @@ def main(argv=None):
             'npoints': len(patch),
             'area': np.sum(vert_areas[patch]),
             'cutoff': args.patch_cutoff[0],
-            'cdr': check_cdr_patch(pdbtree, cdr_atoms, verts[patch]),
+            'cdr': check_cdr_patch(pdbtree, cdr_atoms, surf.vertices[patch]),
         })
     for patch in neg_patches:
         patches.append({
@@ -220,15 +198,15 @@ def main(argv=None):
             'npoints': len(patch),
             'area': np.sum(vert_areas[patch]),
             'cutoff': args.patch_cutoff[1],
-            'cdr': check_cdr_patch(pdbtree, cdr_atoms, verts[patch]),
+            'cdr': check_cdr_patch(pdbtree, cdr_atoms, surf.vertices[patch]),
         })
     patches = pd.DataFrame(patches)
     patches.to_csv(args.out)
 
     # Compute the total solvent-accessible potential.
-    within_range, _, _ = gist.distance_to_spheres(rmax=10)
-    not_protein = full_distances > 0
-    accessible = within_range[not_protein[within_range]]
+    within_range, closest_atom, distance = gist.distance_to_spheres(rmax=10, atomic_radii=radii)
+    not_protein = distance > args.probe_radius
+    accessible = within_range[not_protein]
     voxel_volume = gist.grid.voxel_volume
     accessible_data = gist[columns[0]].values[accessible]
     integral = np.sum(accessible_data) * voxel_volume
@@ -240,15 +218,15 @@ def main(argv=None):
     print(f'{integral} {integral_high} {integral_pos} {integral_neg} {integral_low}')
 
     if args.ply_out:
-        pos_surf = Surface(verts, faces)
+        pos_surf = Surface(surf.vertices, surf.faces)
         color_surface_by_patch(pos_surf, pos_patches, cmap=args.patch_cmap)
         pos_surf.write_ply(args.ply_out + '-pos.ply')
 
-        neg_surf = Surface(verts, faces)
+        neg_surf = Surface(surf.verts, surf.faces)
         color_surface_by_patch(neg_surf, neg_patches, cmap=args.patch_cmap)
         neg_surf.write_ply(args.ply_out + '-neg.ply')
 
-        potential_surf = Surface(verts, faces)
+        potential_surf = Surface(surf.verts, surf.faces)
         potential_surf['values'] = values
         color_surface(potential_surf, 'values', cmap=args.ply_cmap, clim=args.ply_clim)
         potential_surf.write_ply(args.ply_out + '-potential.ply')

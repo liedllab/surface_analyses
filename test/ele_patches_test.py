@@ -33,11 +33,11 @@ def with_or_without_cdrs(request):
 def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     expected = np.array(
         [
-            22575.20631872,
-            12389.29284473,
-            27131.66874305,
-            -4556.46242433,
-            -1867.35195722,
+            25015.40424103,
+            12573.01033872,
+            29718.71768997,
+            -4703.31344894,
+            -1867.65861091,
         ]
     )
     args = [
@@ -50,7 +50,7 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     if with_or_without_cdrs == 'with':
         if shutil.which('hmmscan') is None:
             pytest.skip('hmmscan was not found')
-        args.append('--check_crds')
+        args.append('--check_cdrs')
     out_lines = run_commandline(*args, **kwargs)
     last = out_lines.splitlines()[-1]
     integrals = np.array([float(x) for x in last.split()])
