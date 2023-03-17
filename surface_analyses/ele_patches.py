@@ -213,11 +213,11 @@ def main(argv=None):
         color_surface_by_group(pos_surf, patches['pos'], cmap=args.patch_cmap)
         pos_surf.write_ply(args.ply_out + '-pos.ply')
 
-        neg_surf = Surface(surf.verts, surf.faces)
+        neg_surf = Surface(surf.vertices, surf.faces)
         color_surface_by_group(neg_surf, patches['neg'], cmap=args.patch_cmap)
         neg_surf.write_ply(args.ply_out + '-neg.ply')
 
-        potential_surf = Surface(surf.verts, surf.faces)
+        potential_surf = Surface(surf.vertices, surf.faces)
         potential_surf['values'] = values
         color_surface(potential_surf, 'values', cmap=args.ply_cmap, clim=args.ply_clim)
         potential_surf.write_ply(args.ply_out + '-potential.ply')
@@ -248,11 +248,11 @@ def biggest_residue_contribution(df):
     )
 
 
-def run_pdb2pqr(pdbfile, cwd=".", ff="amber", name_base="apbs"):
+def run_pdb2pqr(pdbfile, cwd=".", ff="AMBER", name_base="apbs"):
     if not isinstance(cwd, pathlib.Path):
         cwd = pathlib.Path(cwd)
     process = subprocess.run(
-        ["pdb2pqr", f"--ff={ff}", pdbfile, name_base + ".pqr", "--apbs-input"],
+        ["pdb2pqr", f"--ff={ff}", pdbfile, name_base + ".pqr", "--apbs-input", "apbs.in"],
         capture_output=True,
         cwd=cwd,
     )
