@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import csv
 from datetime import datetime
 import os
 import pathlib
@@ -13,9 +14,9 @@ from scipy.spatial import cKDTree
 from gisttools.gist import load_dx
 from mdtraj.core.element import carbon, nitrogen, oxygen, sulfur
 
-from .patches import find_patches, triangles_area
+from .patches import assign_patches, triangles_area
 from .surface import Surface
-from .surface import color_surface, color_surface_by_patch
+from .surface import color_surface, color_surface_by_group
 from .surface import compute_sas, compute_ses, compute_gauss_surf
 from .anarci_wrapper.annotation import Annotation
 
@@ -36,7 +37,7 @@ def main(argv=None):
     parser.add_argument('dx', type=str, default=None, nargs='?', help="Optional dx file with the electrostatic potential. If this is omitted, you must specify --apbs_dir")
     parser.add_argument('--apbs_dir', help="Directory in which intermediate files are stored when running APBS. Will be created if it does not exist.", type=str, default=None)
     parser.add_argument('--probe_radius', type=float, help='probe radius in Angstrom', default=1.4)
-    parser.add_argument('-o', '--out', default=sys.stdout, type=str, help='Output csv file.')
+    parser.add_argument('-o', '--out', default=sys.stdout, type=argparse.FileType('w'), help='Output csv file.')
     parser.add_argument(
         '-c', '--patch_cutoff',
         type=float,
@@ -159,22 +160,16 @@ def main(argv=None):
         raise ValueError("Unknown surface type: " + str(args.surface_type))
 
     if args.check_cdrs:
-        cdrs = Annotation.from_traj(pdb, scheme='chothia').cdr_indices()
-        cdrs = set(cdrs)
-        cdr_atoms = set(a.index for a in pdb.top.atoms if a.residue.index in cdrs)
+        cdrs = [
+            str(pdb.top.residue(i))
+            for i in Annotation.from_traj(pdb, scheme='chothia').cdr_indices()
+        ]
     else:
-        cdr_atoms = set()
+        cdrs = []
+    residues = np.array([str(a.residue) for a in pdb.top.atoms])
 
     pdbtree = cKDTree(pdb.xyz[0] * 10.)
-
-    # The patch searching
-    print('Finding patches')
-    values = gist.interpolate(columns, surf.vertices)[columns[0]]
-    pos_patches = find_patches(surf.faces, values > args.patch_cutoff[0])
-    pos_patches = sorted(pos_patches, key=len, reverse=True)
-
-    neg_patches = find_patches(surf.faces, values < args.patch_cutoff[1])
-    neg_patches = sorted(neg_patches, key=len, reverse=True)
+    _, closest_atom = pdbtree.query(surf.vertices)
 
     # Calculate the area of each triangle, and split evenly among the vertices.
     tri_areas = triangles_area(surf.vertices[surf.faces])
@@ -182,26 +177,22 @@ def main(argv=None):
     for face, area in zip(surf.faces, tri_areas):
         vert_areas[face] += area/3
 
-    # Put the patches into a DataFrame
-    patches = []
-    for patch in pos_patches:
-        patches.append({
-            'type': 'positive',
-            'npoints': len(patch),
-            'area': np.sum(vert_areas[patch]),
-            'cutoff': args.patch_cutoff[0],
-            'cdr': check_cdr_patch(pdbtree, cdr_atoms, surf.vertices[patch]),
-        })
-    for patch in neg_patches:
-        patches.append({
-            'type': 'negative',
-            'npoints': len(patch),
-            'area': np.sum(vert_areas[patch]),
-            'cutoff': args.patch_cutoff[1],
-            'cdr': check_cdr_patch(pdbtree, cdr_atoms, surf.vertices[patch]),
-        })
-    patches = pd.DataFrame(patches)
-    patches.to_csv(args.out)
+    # The patch searching
+    print('Finding patches')
+    values = gist.interpolate(columns, surf.vertices)[columns[0]]
+    patches = pd.DataFrame({
+        'positive': assign_patches(surf.faces, values > args.patch_cutoff[0]),
+        'negative': assign_patches(surf.faces, values < args.patch_cutoff[1]),
+        'area': vert_areas,
+        'atom': closest_atom,
+        'residue': residues[closest_atom],
+        'cdr': np.isin(residues, cdrs)[closest_atom]
+    })
+
+    output = csv.writer(args.out)
+    output.writerow(['type', 'npoints', 'area', 'cdr', 'main_residue'])
+    write_patches(patches, output, 'positive')
+    write_patches(patches, output, 'negative')
 
     # Compute the total solvent-accessible potential.
     within_range, closest_atom, distance = gist.distance_to_spheres(rmax=10, atomic_radii=radii)
@@ -219,11 +210,11 @@ def main(argv=None):
 
     if args.ply_out:
         pos_surf = Surface(surf.vertices, surf.faces)
-        color_surface_by_patch(pos_surf, pos_patches, cmap=args.patch_cmap)
+        color_surface_by_group(pos_surf, patches['pos'], cmap=args.patch_cmap)
         pos_surf.write_ply(args.ply_out + '-pos.ply')
 
         neg_surf = Surface(surf.verts, surf.faces)
-        color_surface_by_patch(neg_surf, neg_patches, cmap=args.patch_cmap)
+        color_surface_by_group(neg_surf, patches['neg'], cmap=args.patch_cmap)
         neg_surf.write_ply(args.ply_out + '-neg.ply')
 
         potential_surf = Surface(surf.verts, surf.faces)
@@ -231,6 +222,30 @@ def main(argv=None):
         color_surface(potential_surf, 'values', cmap=args.ply_cmap, clim=args.ply_clim)
         potential_surf.write_ply(args.ply_out + '-potential.ply')
     return
+
+
+def write_patches(df, out, column):
+    groups = dict(list(df[df[column] != -1].groupby(column)))
+    for patch in sorted(groups.values(), key=lambda df: -df['area'].sum()):
+        out.writerow([
+            column,
+            len(patch),
+            patch['area'].sum(),
+            np.any(patch['cdr']),
+            biggest_residue_contribution(patch),
+        ])
+
+
+def biggest_residue_contribution(df):
+    """Find the element in df['residue'] with the highest total contribution in df['area']."""
+    return (
+        df[['residue', 'area']]
+        .groupby('residue')
+        .sum()
+        ['area']
+        .sort_values()
+        .index[-1]
+    )
 
 
 def run_pdb2pqr(pdbfile, cwd=".", ff="amber", name_base="apbs"):

@@ -1,5 +1,4 @@
 import numpy as np
-from itertools import chain
 import numba
 
 
@@ -34,8 +33,7 @@ def find_patches(faces, should_be_in_patch):
         n_in_patch += len(patch)
     return sorted(patches, key=len, reverse=True)
 
-
-def find_connected_regions(faces, n_vertices=None):
+def assign_patches(faces, should_be_in_patch):
     """Find all connected patches from the vertices in should_be_in_patch.
 
     Parameters
@@ -43,27 +41,32 @@ def find_connected_regions(faces, n_vertices=None):
     faces : np.ndarray, shape=(n_faces, 3)
         Each row should contain 3 indices that define a triangle. (As returned
         by the marching_cubes_lewiner algorithm in scikit-image)
-    n_vertices : int
-        The total number of vertices that exist in the model. If None, use
-        np.max(faces) + 1
+    should_be_in_patch : np.ndarray, shape=(n_vertices,), dtype=bool
+        Defines which vertices should be part of a patch
 
     Returns
     -------
-    patches : list of np.ndarray objects.
-        Each array contains a list of vertex indices that define a patch.
+    patch : np.ndarray, shape=(n_vertices), dtype=int
+        The patch number per vertex, or -1 if a vertex is not in a patch.
     """
-    if n_vertices is None: 
-        n_vertices = np.max(faces) + 1
-    not_in_patch = np.ones(n_vertices, dtype=bool)
+    assert len(should_be_in_patch.shape) == 1
+    assert len(faces.shape) == 2 and faces.shape[1] == 3
+    NOT_IN_PATCH = -1
+    UNASSIGNED = -2
+    n_vertices = should_be_in_patch.shape[0]
+    patch = np.full(n_vertices, NOT_IN_PATCH)
+    patch[should_be_in_patch] = UNASSIGNED
     n_in_patch = 0
-    patches = []
-    while n_in_patch < len(not_in_patch):
-        first = np.flatnonzero(not_in_patch)[0]
-        patch = connected(first, n_vertices, faces, include=None)
-        not_in_patch[patch] = False
-        patches.append(patch)
-        n_in_patch += len(patch)
-    return sorted(patches, key=lambda patch: len(patch), reverse=True)
+    n_total = len(np.flatnonzero(should_be_in_patch))
+    i_patch = 0
+    while n_in_patch < n_total:
+        first = np.flatnonzero(patch == UNASSIGNED)[0]
+        patch_vertices = connected(first, n_vertices, faces, include=should_be_in_patch)
+        patch[patch_vertices] = i_patch
+        n_in_patch += len(patch_vertices)
+        i_patch += 1
+    return patch
+
 
 def connected(start_vertex, n_vertices, faces, include=None):
     """Find all vertices directly or indirectly linked to a starting vertex.

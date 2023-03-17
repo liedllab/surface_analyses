@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from surface_analyses.ele_patches import main
+from surface_analyses.ele_patches import main, biggest_residue_contribution
 from contextlib import redirect_stdout
 import io
 from pathlib import Path
@@ -60,3 +60,10 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     if with_or_without_cdrs == 'without':
         expected_patches['cdr'] = False
     assert_frame_equal(patches, expected_patches)
+
+def test_biggest_residue_contribution():
+    df = pd.DataFrame({
+        "residue": ["c", "a", "b", "a"],
+        "area": [1, 2, 3, 2],
+    })
+    assert biggest_residue_contribution(df) == "a"
