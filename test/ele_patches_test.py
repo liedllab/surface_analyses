@@ -61,6 +61,20 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
         expected_patches['cdr'] = False
     assert_frame_equal(patches, expected_patches)
 
+def test_trastuzumab_ply_writing_works(with_or_without_cdrs):
+    args = [
+        TRASTUZUMAB_PATH / 'apbs-input.pdb',
+        TRASTUZUMAB_PATH / 'apbs-potential.dx',
+        '--out',
+        str(TRASTUZUMAB_PATH / 'apbs-patches.csv'),
+        '--ply_out',
+        str(TRASTUZUMAB_PATH / 'apbs-potential.ply'),
+        '--surface_type',
+        'sas',
+    ]
+    run_commandline(*args)
+    # for now this only checks whether there are any errors
+
 def test_biggest_residue_contribution():
     df = pd.DataFrame({
         "residue": ["c", "a", "b", "a"],

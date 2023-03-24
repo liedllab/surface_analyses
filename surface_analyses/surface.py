@@ -258,7 +258,6 @@ def color_surface_by_patch(surf, patches, cmap="tab20c"):
     cmap: matplotlib colormap
         valid argument for matplotlib.cm.get_cmap
     """
-    cmap = matplotlib.cm.get_cmap(cmap)
     values = np.full(surf.n_vertices, -1)
     for i, patch in enumerate(patches):
         values[patch] = i
@@ -276,6 +275,7 @@ def color_surface_by_group(surf, group, cmap="tab20c"):
     cmap: matplotlib colormap
         valid argument for matplotlib.cm.get_cmap
     """
+    cmap = matplotlib.cm.get_cmap(cmap)
     colors = cmap(group)[:, :3] * 256
     not_in_patch = group == -1
     colors[not_in_patch] = 256

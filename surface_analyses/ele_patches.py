@@ -210,11 +210,11 @@ def main(argv=None):
 
     if args.ply_out:
         pos_surf = Surface(surf.vertices, surf.faces)
-        color_surface_by_group(pos_surf, patches['pos'], cmap=args.patch_cmap)
+        color_surface_by_group(pos_surf, patches['positive'], cmap=args.patch_cmap)
         pos_surf.write_ply(args.ply_out + '-pos.ply')
 
         neg_surf = Surface(surf.vertices, surf.faces)
-        color_surface_by_group(neg_surf, patches['neg'], cmap=args.patch_cmap)
+        color_surface_by_group(neg_surf, patches['negative'], cmap=args.patch_cmap)
         neg_surf.write_ply(args.ply_out + '-neg.ply')
 
         potential_surf = Surface(surf.vertices, surf.faces)
