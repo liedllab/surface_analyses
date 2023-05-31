@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import csv
 from datetime import datetime
 import os
@@ -31,8 +32,7 @@ element_radii = {
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
-    import argparse
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('pdb', type=str)
     parser.add_argument('dx', type=str, default=None, nargs='?', help="Optional dx file with the electrostatic potential. If this is omitted, you must specify --apbs_dir")
     parser.add_argument('--apbs_dir', help="Directory in which intermediate files are stored when running APBS. Will be created if it does not exist.", type=str, default=None)
@@ -65,10 +65,16 @@ def main(argv=None):
         help='Base name for .ply output for PyMOL. Will write BASE-pos.ply and BASE-neg.ply.',
     )
     parser.add_argument(
-        '--patch_cmap',
+        '--pos_patch_cmap',
         type=str,
         default='tab20c',
-        help='Matplotlib colormap for .ply patches output.',
+        help='Matplotlib colormap for .ply positive patches output.',
+    )
+    parser.add_argument(
+        '--neg_patch_cmap',
+        type=str,
+        default='tab20c',
+        help='Matplotlib colormap for .ply negative patches output.',
     )
     parser.add_argument(
         '--ply_cmap',
@@ -210,11 +216,11 @@ def main(argv=None):
 
     if args.ply_out:
         pos_surf = Surface(surf.vertices, surf.faces)
-        color_surface_by_group(pos_surf, patches['positive'], cmap=args.patch_cmap)
+        color_surface_by_group(pos_surf, patches['positive'], cmap=args.pos_patch_cmap)
         pos_surf.write_ply(args.ply_out + '-pos.ply')
 
         neg_surf = Surface(surf.vertices, surf.faces)
-        color_surface_by_group(neg_surf, patches['negative'], cmap=args.patch_cmap)
+        color_surface_by_group(neg_surf, patches['negative'], cmap=args.neg_patch_cmap)
         neg_surf.write_ply(args.ply_out + '-neg.ply')
 
         potential_surf = Surface(surf.vertices, surf.faces)

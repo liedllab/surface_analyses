@@ -271,13 +271,16 @@ def color_surface_by_group(surf, group, cmap="tab20c"):
     ----------
     surf: Surface
     group: np.ndarray
-        group of each vertex, or -1 for no group (white)
+        group of each vertex, or negative numbers for no group (white)
     cmap: matplotlib colormap
         valid argument for matplotlib.cm.get_cmap
     """
     cmap = matplotlib.cm.get_cmap(cmap)
+    if isinstance(cmap, matplotlib.colors.LinearSegmentedColormap):
+        # this converts to float
+        group = group / np.max(group)
     colors = cmap(group)[:, :3] * 256
-    not_in_patch = group == -1
+    not_in_patch = group < 0
     colors[not_in_patch] = 256
     surf.set_color(*colors.T)
 
