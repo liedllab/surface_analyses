@@ -5,6 +5,7 @@ scikit-image
 git+https://github.com/liedllab/gisttools.git
 plyfile
 matplotlib>=3.7
-git+https://github.com/oxpig/ANARCI
+git+https://github.com/oxpig/ANARCI@b22f2ee05f4fc241f558b8ccb0c522d4e7563b30
+pdb2pqr
 biopython
 rdkit
