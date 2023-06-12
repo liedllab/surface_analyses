@@ -19,7 +19,6 @@ from .patches import assign_patches, triangles_area
 from .surface import Surface
 from .surface import color_surface, color_surface_by_group
 from .surface import compute_sas, compute_ses, compute_gauss_surf
-from .anarci_wrapper.annotation import Annotation
 
 
 element_radii = {
@@ -166,10 +165,18 @@ def main(argv=None):
         raise ValueError("Unknown surface type: " + str(args.surface_type))
 
     if args.check_cdrs:
-        cdrs = [
-            str(pdb.top.residue(i))
-            for i in Annotation.from_traj(pdb, scheme='chothia').cdr_indices()
-        ]
+        try:
+            from .anarci_wrapper.annotation import Annotation
+            cdrs = [
+                str(pdb.top.residue(i))
+                for i in Annotation.from_traj(pdb, scheme='chothia').cdr_indices()
+            ]
+        except Exception as e:
+            print(f"CDR annotation failed with the following error:\n{e}\n"
+                   "If the error pertains to the annotation tool ANARCI or ANARCI is missing, "
+                   "a fresh installation of ANARCI ( https://github.com/oxpig/ANARCI ) or its dependencies might help.\n\n"
+                   "To use ele_patches without CDR annotation, rerun the script without the '--check_cdrs' flag." )
+            raise RuntimeError("CDR Annotation failed")
     else:
         cdrs = []
     residues = np.array([str(a.residue) for a in pdb.top.atoms])
