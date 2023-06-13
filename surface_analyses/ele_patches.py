@@ -171,7 +171,7 @@ def main(argv=None):
                 str(pdb.top.residue(i))
                 for i in Annotation.from_traj(pdb, scheme='chothia').cdr_indices()
             ]
-        except Exception as e:
+        except ImportError as e:
             print(f"CDR annotation failed with the following error:\n{e}\n"
                    "If the error pertains to the annotation tool ANARCI or ANARCI is missing, "
                    "a fresh installation of ANARCI ( https://github.com/oxpig/ANARCI ) or its dependencies might help.\n\n"

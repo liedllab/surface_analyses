@@ -13,6 +13,12 @@ from pandas.testing import assert_frame_equal
 import numpy as np
 import pytest
 
+try:
+    import anarci
+    HAS_ANARCI = True
+except ImportError:
+    HAS_ANARCI = False
+
 
 TESTS_PATH = Path(os.path.dirname(__file__))
 TRASTUZUMAB_PATH = TESTS_PATH / 'trastuzumab'
@@ -50,6 +56,8 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     if with_or_without_cdrs == 'with':
         if shutil.which('hmmscan') is None:
             pytest.skip('hmmscan was not found')
+        if not HAS_ANARCI:
+            pytest.skip('ANARCI is not available')
         args.append('--check_cdrs')
     out_lines = run_commandline(*args, **kwargs)
     last = out_lines.splitlines()[-1]
@@ -61,7 +69,8 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
         expected_patches['cdr'] = False
     assert_frame_equal(patches, expected_patches)
 
-def test_trastuzumab_ply_writing_works(with_or_without_cdrs):
+
+def test_trastuzumab_ply_writing_works():
     args = [
         TRASTUZUMAB_PATH / 'apbs-input.pdb',
         TRASTUZUMAB_PATH / 'apbs-potential.dx',
@@ -74,6 +83,7 @@ def test_trastuzumab_ply_writing_works(with_or_without_cdrs):
     ]
     run_commandline(*args)
     # for now this only checks whether there are any errors
+
 
 def test_biggest_residue_contribution():
     df = pd.DataFrame({
