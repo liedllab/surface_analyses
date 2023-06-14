@@ -330,6 +330,6 @@ class QuantileSkippingCenteredNorm(matplotlib.colors.CenteredNorm):
         A = np.asanyarray(A)
         above = A[A > self._vcenter]
         below = A[A < self._vcenter]
-        qlower = np.quantile(below, self.clip_fraction)
-        qhigher = np.quantile(above, 1 - self.clip_fraction)
+        qlower = np.quantile(below, self.clip_fraction) if len(below) > 0 else self.vcenter
+        qhigher = np.quantile(above, 1 - self.clip_fraction) if len(above) > 0 else self.vcenter
         self.halfrange = abs(max(self.vcenter - qlower, qhigher - self.vcenter))
