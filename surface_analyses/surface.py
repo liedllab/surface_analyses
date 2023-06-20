@@ -275,7 +275,7 @@ def color_surface_by_group(surf, group, cmap="tab20c"):
     cmap: matplotlib colormap
         valid argument for matplotlib.cm.get_cmap
     """
-    cmap = matplotlib.cm.get_cmap(cmap)
+    cmap = matplotlib.colormaps.get_cmap(cmap)
     if isinstance(cmap, matplotlib.colors.LinearSegmentedColormap):
         # this converts to float
         group = group / np.max(group)
@@ -309,7 +309,7 @@ def color_surface(surf, data, cmap="coolwarm_r", clip_fraction=0.1, clim=None):
     else:
         vmin, vmax = clim
         norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
-    cmap = matplotlib.cm.get_cmap(cmap)
+    cmap = matplotlib.colormaps.get_cmap(cmap)
     values = norm(surf[data])
     colors = cmap(values)[:, :3] * 256
     surf.set_color(*colors.T)
@@ -330,6 +330,6 @@ class QuantileSkippingCenteredNorm(matplotlib.colors.CenteredNorm):
         A = np.asanyarray(A)
         above = A[A > self._vcenter]
         below = A[A < self._vcenter]
-        qlower = np.quantile(below, self.clip_fraction)
-        qhigher = np.quantile(above, 1 - self.clip_fraction)
+        qlower = np.quantile(below, self.clip_fraction) if len(below) > 0 else self.vcenter
+        qhigher = np.quantile(above, 1 - self.clip_fraction) if len(above) > 0 else self.vcenter
         self.halfrange = abs(max(self.vcenter - qlower, qhigher - self.vcenter))
