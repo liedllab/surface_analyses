@@ -261,10 +261,10 @@ def color_surface_by_patch(surf, patches, cmap="tab20c"):
     values = np.full(surf.n_vertices, -1)
     for i, patch in enumerate(patches):
         values[patch] = i
-    color_surface_by_group(surf, values, cmap=cmap)
+    color_surface_by_group(surf, values, order=range(len(patches)), cmap=cmap)
 
 
-def color_surface_by_group(surf, group, cmap="tab20c"):
+def color_surface_by_group(surf, group, order, cmap="tab20c"):
     """Give each group a color from the cmap.
 
     Parameters
@@ -272,15 +272,20 @@ def color_surface_by_group(surf, group, cmap="tab20c"):
     surf: Surface
     group: np.ndarray
         group of each vertex, or negative numbers for no group (white)
+    order: iterable
+        specify the order in which patches should be placed in the colormap
     cmap: matplotlib colormap
         valid argument for matplotlib.cm.get_cmap
     """
     cmap = matplotlib.colormaps.get_cmap(cmap)
+    order_dict = {elem: i for i, elem in enumerate(order)}
+    order_dict[-1] = -1
+    ordered = np.array([order_dict[elem] for elem in group])
     if isinstance(cmap, matplotlib.colors.LinearSegmentedColormap):
         # this converts to float
-        group = group / np.max(group)
-    colors = cmap(group)[:, :3] * 256
-    not_in_patch = group < 0
+        ordered = ordered / np.max(ordered)
+    colors = cmap(ordered)[:, :3] * 256
+    not_in_patch = ordered < 0
     colors[not_in_patch] = 256
     surf.set_color(*colors.T)
 

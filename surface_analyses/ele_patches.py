@@ -223,11 +223,15 @@ def main(argv=None):
 
     if args.ply_out:
         pos_surf = Surface(surf.vertices, surf.faces)
-        color_surface_by_group(pos_surf, patches['positive'], cmap=args.pos_patch_cmap)
+        pos_area = patches.query('positive != -1').groupby('positive').sum(numeric_only=True)['area']
+        pos_order = pos_area.sort_values(ascending=False).index
+        color_surface_by_group(pos_surf, patches['positive'].values, order=pos_order, cmap=args.pos_patch_cmap)
         pos_surf.write_ply(args.ply_out + '-pos.ply')
 
         neg_surf = Surface(surf.vertices, surf.faces)
-        color_surface_by_group(neg_surf, patches['negative'], cmap=args.neg_patch_cmap)
+        neg_area = patches.query('negative != -1').groupby('negative').sum(numeric_only=True)['area']
+        neg_order = neg_area.sort_values(ascending=False).index
+        color_surface_by_group(neg_surf, patches['negative'].values, order=neg_order, cmap=args.neg_patch_cmap)
         neg_surf.write_ply(args.ply_out + '-neg.ply')
 
         potential_surf = Surface(surf.vertices, surf.faces)
