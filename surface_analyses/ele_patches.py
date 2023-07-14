@@ -252,7 +252,6 @@ def main(argv=None):
     integral_low = np.sum(np.minimum(accessible_data - args.integral_cutoff[1], 0)) * voxel_volume
     print('Integrals (total, ++, +, -, --):')
     print(f'{integral} {integral_high} {integral_pos} {integral_neg} {integral_low}')
-    print(patches)
     
     if args.ply_out:
         pos_surf = Surface(surf.vertices, surf.faces)
