@@ -93,6 +93,18 @@ def main(argv=None):
         action='store_true',
         help='For an antibody Fv region as input: check whether patches belong to CDRs.',
     )
+    parser.add_argument(
+        '-n','--n_patches',
+        type=int,
+        default=0,
+        help='Restrict output to n patches. Positive values output n largest patches, negative n smallest patches.',
+    )
+    parser.add_argument(
+        '-s','--size_cutoff',
+        type=float,
+        default=0,
+        help='Restrict output to patches with an area of over s A^2. If s = 0, no cutoff is applied (default).',
+    )
     parser.add_argument('--gauss_shift', type=float, default=0.1)
     parser.add_argument('--gauss_scale', type=float, default=1.0)
     args = parser.parse_args(argv)
@@ -201,7 +213,27 @@ def main(argv=None):
         'residue': residues[closest_atom],
         'cdr': np.isin(residues, cdrs)[closest_atom]
     })
-
+    
+    #keep args.n_patches largest patches (n > 0) or smallest patches (n < 0) or patches with an area over the size cutoff
+    if args.n_patches != 0 or args.size_cutoff != 0: 
+        #interesting interaction: setting a -n cutoff and size cutoff should yield the n smallest patches with an area over the size cutoff
+        replace_vals = {}
+        for patch_type in ('negative', 'positive'):
+            # sort patches by area and filter top n patches (or bottom n patches for n < 0)
+            # also we apply the size cutoff here. It defaults to 0, so should not do anything if not explicitly set as all areas should be > 0.
+            area = patches.query(f'{patch_type} != -1').groupby(f'{patch_type}').sum(numeric_only=True)['area']
+            order = (area[area > args.size_cutoff] # discard patches with an area under size cutoff
+                     .sort_values(ascending=False).index)  # ... and sort them
+            
+            filtered = order[:args.n_patches] if args.n_patches > 0 else order[args.n_patches:] 
+            # set patches not in filtered to -1
+            patches.loc[~patches[patch_type].isin(filtered), patch_type] = -1 
+            
+            # build replacement dict to renumber patches in df according to size
+            order_map = {elem : i for i, elem in enumerate(order[:args.n_patches]) }
+            replace_vals[patch_type] = order_map        
+        patches.replace(replace_vals, inplace=True)
+        
     output = csv.writer(args.out)
     output.writerow(['type', 'npoints', 'area', 'cdr', 'main_residue'])
     write_patches(patches, output, 'positive')
@@ -220,7 +252,8 @@ def main(argv=None):
     integral_low = np.sum(np.minimum(accessible_data - args.integral_cutoff[1], 0)) * voxel_volume
     print('Integrals (total, ++, +, -, --):')
     print(f'{integral} {integral_high} {integral_pos} {integral_neg} {integral_low}')
-
+    print(patches)
+    
     if args.ply_out:
         pos_surf = Surface(surf.vertices, surf.faces)
         pos_area = patches.query('positive != -1').groupby('positive').sum(numeric_only=True)['area']
