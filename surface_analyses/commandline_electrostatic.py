@@ -109,7 +109,7 @@ def main(argv=None):
     parser.add_argument('--gauss_scale', type=float, default=1.0)
     args = parser.parse_args(argv)
 
-    print(f'ele_patches.py, {datetime.now().strftime("%m/%d/%Y, %H:%M:%S")}\n')
+    print(f'pep_patch_electrostatic, {datetime.now().strftime("%m/%d/%Y, %H:%M:%S")}\n')
     print('Command line arguments:')
     print(' '.join(sys.argv))
 
@@ -187,7 +187,7 @@ def main(argv=None):
             print(f"CDR annotation failed with the following error:\n{e}\n"
                    "If the error pertains to the annotation tool ANARCI or ANARCI is missing, "
                    "a fresh installation of ANARCI ( https://github.com/oxpig/ANARCI ) or its dependencies might help.\n\n"
-                   "To use ele_patches without CDR annotation, rerun the script without the '--check_cdrs' flag." )
+                   "To use pep_patch_electrostatic without CDR annotation, rerun the script without the '--check_cdrs' flag." )
             raise RuntimeError("CDR Annotation failed")
     else:
         cdrs = []

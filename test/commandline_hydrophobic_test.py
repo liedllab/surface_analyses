@@ -9,7 +9,7 @@ import tempfile
 import pytest
 import numpy as np
 
-from surface_analyses.commandline import main
+from surface_analyses.commandline_hydrophobic import main
 
 TrastuzumabRun = namedtuple('TrastuzumabRun', 'scale method expected_data')
 
@@ -95,7 +95,7 @@ def test_rdkit_crippen():
 
 
 def assert_outputs_equal(a, b):
-    """Given two dicts or npz files containing a surfscore output file, assert
+    """Given two dicts or npz files containing a pep_patch_hydrophobic output file, assert
     that they are equal."""
     assert sorted(a) == sorted(b)
     for key in a:

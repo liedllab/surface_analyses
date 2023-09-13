@@ -17,7 +17,7 @@ from .patches import find_patches, triangles_area
 from .surface import color_surface_by_patch, color_surface
 
 def main(args=None):
-    print(f"surfscore starting at {datetime.datetime.now()}")
+    print(f"pep_patch_hydrophobic starting at {datetime.datetime.now()}")
     if args is None:
         args = sys.argv[1:]
     import argparse

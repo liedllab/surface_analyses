@@ -13,17 +13,17 @@ setup(
     setup_requires=['pytest_runner'],
     tests_require=['pytest'],
     py_modules=[
-        "surface_analyses.commandline",
+        "surface_analyses.commandline_hydrophobic",
         "surface_analyses.structure",
         "surface_analyses.propensities",
         "surface_analyses.hydrophobic_potential",
         "surface_analyses.pdb",
-        "surface_analyses.ele_patches",
+        "surface_analyses.commandline_electrostatic",
     ],
     entry_points={
         'console_scripts': [
-            'surfscore=surface_analyses.commandline:main',
-            'ele_patches=surface_analyses.ele_patches:main',
+            'pep_patch_hydrophobic=surface_analyses.commandline_hydrophobic:main',
+            'pep_patch_electrostatic=surface_analyses.commandline_electrostatic:main',
         ],
     },
 )

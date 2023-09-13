@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from surface_analyses.ele_patches import main, biggest_residue_contribution
+from surface_analyses.commandline_electrostatic import main, biggest_residue_contribution
 from contextlib import redirect_stdout
 import io
 from pathlib import Path
