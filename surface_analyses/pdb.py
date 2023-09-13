@@ -39,6 +39,10 @@ class AbstractAtom(abc.ABC):
     def atom_type(self):
         return NotImplemented
 
+    @property
+    def is_heavy(self):
+        return self.atomic_number != 1
+
     def find_bonded(self, **kwargs):
         for other in self.bonded_atoms:
             skip = False

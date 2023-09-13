@@ -2,6 +2,7 @@ import datetime
 import logging
 import sys
 import warnings
+import os.path
 
 import mdtraj as md
 import numpy as np
@@ -20,7 +21,7 @@ def main(args=None):
     if args is None:
         args = sys.argv[1:]
     import argparse
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
     parser.add_argument('parm')
     parser.add_argument('trajs', nargs='+')
     parser.add_argument('--ref', default=None)
@@ -57,6 +58,7 @@ def main(args=None):
     pot_parser.add_argument('--alpha', help='alpha parameter for Heiden weighting function [nm^-1]', default=15., type=float)
     pot_parser.add_argument('--blur_sigma', help='Sigma for distance to gaussian surface [nm]', default=.6, type=float)
     pot_parser.add_argument('--ply_out', help='Output .ply file of first frame for PyMOL')
+    pot_parser.add_argument('--ply_cmap', help='Color map for the .ply output')
     pot_parser.add_argument('--patches', action='store_true', help='Output patches instead of hydrophobic potential')
     pot_parser.add_argument('--patch_min', type=float, default=0.12, help='Minimum vertex value to count as a patch')
     parser.add_argument('-v', '--verbose', action='store_true')
@@ -78,7 +80,7 @@ def main(args=None):
     strip_h = args.scale == 'eisenberg' and not args.group_heavy
     if strip_h:
         logging.info("Stripping hydrogen atoms")
-        atoms = [a for a in atoms if is_heavy(a)]
+        atoms = [a for a in atoms if a.is_heavy]
         traj = traj.atom_slice(traj.top.select('not element H'))
     print(f'Loaded {traj.n_frames} frames with {traj.n_atoms} atoms.')
     if args.group_heavy:
@@ -166,14 +168,29 @@ def main(args=None):
                     size = area[p].sum()
                     print(f"{i_frame},{ip},{size}")
         if args.ply_out:
-            surf0 = surfs[0]
             if args.patches:
-                color_surface_by_patch(surf0, patches[0])
+                for surf, patch in zip(surfs, patches):
+                    color_surface_by_patch(surf, patch, cmap=args.ply_cmap)
             else:
-                color_surface(surf0, 'values')
-            surf0.write_ply(args.ply_out)
+                for surf in surfs:
+                    color_surface(surf, 'values', cmap=args.ply_cmap)
+            fnames = ply_filenames(args.ply_out, len(surfs))
+            for surf, fname in zip(surfs, fnames):
+                    surf.write_ply(fname, coordinate_scaling=10)
     np.savez(args.out, **output)
     args.out.close()
+
+def ply_filenames(basename, n) -> list:
+    """return [basename] if n==1, otherwise insert indices 1..n before the file
+    extension.
+    """
+    if n == 1:
+        return [basename]
+    base, ext = os.path.splitext(basename)
+    return [
+        base + str(i) + ext
+        for i in range(n)
+    ]
 
 def rdkit_crippen_logp(pdb, smiles):
     import rdkit.Chem.AllChem
@@ -191,34 +208,14 @@ def get_atoms_list(fname):
     elif fname.endswith('.pdb') or fname.endswith('.pdb.gz'):
         return get_pdb_atoms_list(fname)
 
+
 def get_parm7_atoms_list(fname):
     raw = RawTopology.from_file_name(fname)
     return list(raw.iter_atoms(raw.n_protein_atoms()))
+
 
 def get_pdb_atoms_list(fname):
     raw = md.load_pdb(fname, standard_names=False)
     raw = raw.atom_slice(raw.top.select('not resname HOH WAT NA CL'))
     atoms = PdbAtom.list_from_md_topology(raw.top)
-    # In mdtraj, the hydrogens of the N-terminal residue are not bonded to
-    # anything. Bond them to the respective N atom.
-    # no_bonds = [a for a in atoms if len(a.bonded_atoms) == 0]
-    # for a in no_bonds:
-    #     resid = a.residue_id
-    #     if a.atomic_number != 1:
-    #         warnings.warn(f"Encountered a heavy atom without bonds: {a}. Cannot form bonds for this atom.")
-    #         continue
-    #     # Expect that the N is before the H, but in the same residue, and
-    #     # within the first 20 atoms.
-    #     for other in atoms[:20][:a.i]:
-    #         if other.residue_id == resid and other.name == 'N':
-    #             a._bond(other)
-    #             break
-    #     else:
-    #         warnings.warn(f'Could not bond atom {a}')
-    # no_bonds = [a for a in atoms if len(a.bonded_atoms) == 0]
-    # if no_bonds:
-    #     raise ValueError(f"The following atoms have no bond partners: {no_bonds}")
     return atoms
-
-def is_heavy(atom):
-    return atom.atomic_number != 1

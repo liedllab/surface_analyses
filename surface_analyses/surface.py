@@ -103,9 +103,9 @@ class Surface:
         out = plyfile.PlyData([vertex, face], text=text)
         return out
 
-    def write_ply(self, fname):
+    def write_ply(self, fname, coordinate_scaling=1.):
         with open(fname, mode="wb") as f:
-            self.as_plydata().write(f)
+            self.as_plydata(units_per_angstrom=coordinate_scaling*0.01).write(f)
 
     @classmethod
     def from_plydata(cls, plydata):
@@ -247,7 +247,7 @@ def gaussian_grid_variable_sigma(grid, xyz, sigma, rmax=None):
     return out.reshape(grid.shape)
 
 
-def color_surface_by_patch(surf, patches, cmap="tab20c"):
+def color_surface_by_patch(surf, patches, cmap=None):
     """Given a list of patches, give each patch a color from the cmap.
 
     Parameters
@@ -256,7 +256,7 @@ def color_surface_by_patch(surf, patches, cmap="tab20c"):
     patches: List[1D integer np.ndarray]
         vertex indices per patch
     cmap: matplotlib colormap
-        valid argument for matplotlib.cm.get_cmap
+        valid argument for matplotlib.cm.get_cmap. Defaults to tab20c.
     """
     values = np.full(surf.n_vertices, -1)
     for i, patch in enumerate(patches):
@@ -264,7 +264,7 @@ def color_surface_by_patch(surf, patches, cmap="tab20c"):
     color_surface_by_group(surf, values, order=range(len(patches)), cmap=cmap)
 
 
-def color_surface_by_group(surf, group, order, cmap="tab20c"):
+def color_surface_by_group(surf, group, order, cmap=None):
     """Give each group a color from the cmap.
 
     Parameters
@@ -275,9 +275,9 @@ def color_surface_by_group(surf, group, order, cmap="tab20c"):
     order: iterable
         specify the order in which patches should be placed in the colormap
     cmap: matplotlib colormap
-        valid argument for matplotlib.cm.get_cmap
+        valid argument for matplotlib.cm.get_cmap. Defaults to tab20c.
     """
-    cmap = matplotlib.colormaps.get_cmap(cmap)
+    cmap = matplotlib.colormaps.get_cmap(cmap or "tab20c")
     order_dict = {elem: i for i, elem in enumerate(order)}
     order_dict[-1] = -1
     ordered = np.array([order_dict[elem] for elem in group])
@@ -290,7 +290,7 @@ def color_surface_by_group(surf, group, order, cmap="tab20c"):
     surf.set_color(*colors.T)
 
 
-def color_surface(surf, data, cmap="coolwarm_r", clip_fraction=0.1, clim=None):
+def color_surface(surf, data, cmap=None, clip_fraction=0.1, clim=None):
     """Given values for each vertex, color surf using the cmap.
 
     mpl.colors.CenteredNorm is used to scale the values, i.e., 0 will be in the
@@ -302,7 +302,7 @@ def color_surface(surf, data, cmap="coolwarm_r", clip_fraction=0.1, clim=None):
     data: np.ndarray, shape = (n_vertices,)
         vertex values
     cmap: matplotlib colormap
-        valid argument for matplotlib.cm.get_cmap
+        valid argument for matplotlib.cm.get_cmap. Defaults to "coolwarm_r".
     clip_fraction: float
         fraction (quantile) of the datapoints that should be clipped in the
         color output. If clim is given, this is ignored.
@@ -314,7 +314,7 @@ def color_surface(surf, data, cmap="coolwarm_r", clip_fraction=0.1, clim=None):
     else:
         vmin, vmax = clim
         norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
-    cmap = matplotlib.colormaps.get_cmap(cmap)
+    cmap = matplotlib.colormaps.get_cmap(cmap or "coolwarm_r")
     values = norm(surf[data])
     colors = cmap(values)[:, :3] * 256
     surf.set_color(*colors.T)

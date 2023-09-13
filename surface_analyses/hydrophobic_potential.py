@@ -32,7 +32,7 @@ def hydrophobic_potential(traj, propensities, rmax, spacing, solv_rad, rcut, alp
     radii = np.array([a.element.radius for a in traj.top.atoms])
     surfaces = []
     for frame in traj.xyz:
-        pot = MoeHydrophobicPotential(frame, propensities, rcut, alpha)
+        pot = HeidenHydrophobicPotential(frame, propensities, rcut, alpha)
         grid = grid_with_walldist(frame, 2*rmax, spacing)
         ses = compute_ses(grid, frame, radii, solv_rad)
         surf_vals = pot.evaluate(ses.vertices)
@@ -48,7 +48,7 @@ def hydrophobic_potential(traj, propensities, rmax, spacing, solv_rad, rcut, alp
     return surfaces
 
 
-class MoeHydrophobicPotential:
+class HeidenHydrophobicPotential:
     def __init__(self, centers, logp, rcut, alpha):
         self.centers = centers
         self.logp = logp
