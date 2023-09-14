@@ -1,0 +1,7 @@
+This folder contains models for an antibody fv dataset portraying the clinical-stage antibody landscape as discussed in the following paper:
+    Jain, T., Sun, T., Durand, S., Hall, A., Houston, N. R., Nett, J. H., ... & Wittrup, K. D. (2017). Biophysical properties of the clinical-stage antibody landscape. Proceedings of the National Academy of Sciences, 114(5), 944-949.
+    ( https://doi.org/10.1073/pnas.1616408114 )
+    
+The sequences are stored in jain.fasta and all models were created using ImmuneBuilder 0.0.9.
+The code to create the models is found in ImmuneBuilder.ipynb  
+
