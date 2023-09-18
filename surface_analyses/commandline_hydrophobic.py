@@ -17,7 +17,7 @@ from .patches import find_patches, triangles_area
 from .surface import color_surface_by_patch, color_surface
 
 def main(args=None):
-    print(f"surfscore starting at {datetime.datetime.now()}")
+    print(f"pep_patch_hydrophobic starting at {datetime.datetime.now()}")
     if args is None:
         args = sys.argv[1:]
     import argparse
@@ -25,11 +25,15 @@ def main(args=None):
     parser.add_argument('parm')
     parser.add_argument('trajs', nargs='+')
     parser.add_argument('--ref', default=None)
-    parser.add_argument('--scale', required=True, help='Hydrophobicity scale in table format, or "crippen" or "eisenberg", or "rdkit-crippen".')
+    parser.add_argument('--scale', required=True, help=(
+        'Hydrophobicity scale in table format, or "crippen" or "eisenberg", or '
+        'rdkit-crippen". For rdkit-crippen, parm needs to be in PDB format, and '
+        'a SMILES file must be supplied with --smiles.'
+    ))
     parser.add_argument('--smiles', type=str, help='SMILES for rdkit-crippen. Use e.g. @smiles.txt to read them from a file.')
-    parser.add_argument('--out', type=argparse.FileType('wb'), required=True, help='Output in .npz format')
+    parser.add_argument('--out', type=str, required=True, help='Output in .npz format')
     parser.add_argument('--stride', default=1, type=int)
-    parser.add_argument('--surftype', choices=('normal', 'sc_norm', 'atom_norm'), default='normal')
+    parser.add_argument('--surftype', help="Controls the grouping of SASA for surface-area based scores (--surfscore, --sap, --sh)", choices=('normal', 'sc_norm', 'atom_norm'), default='normal')
     parser.add_argument('--group_heavy', action='store_true')
 
     surfscore_parser = parser.add_argument_group('Surface Score related options')
@@ -49,11 +53,25 @@ def main(args=None):
     sh_parser.add_argument('--sh_rad', type=float, default=0.8, help=(
         'Radius for surrounding hydrophobicity [nm]'
     ))
-    pot_parser = parser.add_argument_group('Hydrophobic potential options')
+    pot_parser = parser.add_argument_group(
+        'Hydrophobic potential options',
+        description=(
+            'Compute a hydrophobic potential using the method by Heiden et al. '
+            '(J. Comput. Aided Mol. Des. 7, 503–514 (1993)). '
+            'A triangulated solvent-excluded surface is created via a marching cubes algorithm '
+            'with given grid spacing (--grid_spacing) and and solvent radius (--solv_rad), '
+            'and the atomic hydrophobicity values from the scale (--scale) are mapped to it '
+            'via a sigmoidal distance weighting function with given cutoff (--rcut) and '
+            'half height of rmax (--rmax). The steepness is controlled by --alpha (higher -> steeper). '
+            'The potential is output to the npz file. Additioanlly, a .ply file can be written '
+            'for visualization (--ply_out). By default, it contains the potential values, but can also '
+            'contain the patches (--patches).'
+        )
+    )
     pot_parser.add_argument('--potential', action='store_true')
     pot_parser.add_argument('--rmax', default=0.3, type=float)
     pot_parser.add_argument('--solv_rad', default=0.14, type=float)
-    pot_parser.add_argument('--grid_spacing', help='Grid spacing in NANOMETERS [nm]', default=.05, type=float)
+    pot_parser.add_argument('--grid_spacing', help='Grid spacing for the surface definition in NANOMETERS [nm]', default=.05, type=float)
     pot_parser.add_argument('--rcut', help='rcut parameter for Heiden weighting function [nm]', default=.5, type=float)
     pot_parser.add_argument('--alpha', help='alpha parameter for Heiden weighting function [nm^-1]', default=15., type=float)
     pot_parser.add_argument('--blur_sigma', help='Sigma for distance to gaussian surface [nm]', default=.6, type=float)
@@ -178,7 +196,7 @@ def main(args=None):
             for surf, fname in zip(surfs, fnames):
                     surf.write_ply(fname, coordinate_scaling=10)
     np.savez(args.out, **output)
-    args.out.close()
+
 
 def ply_filenames(basename, n) -> list:
     """return [basename] if n==1, otherwise insert indices 1..n before the file
@@ -196,7 +214,7 @@ def rdkit_crippen_logp(pdb, smiles):
     import rdkit.Chem.AllChem
     import rdkit.Chem.Crippen
     mol = rdkit.Chem.MolFromPDBFile(pdb, removeHs=False)
-    ref = rdkit.Chem.MolFromSmiles(smiles)
+    ref = rdkit.Chem.AddHs(rdkit.Chem.MolFromSmiles(smiles))
     mol = rdkit.Chem.AllChem.AssignBondOrdersFromTemplate(ref, mol)
     params = rdkit.Chem.Crippen._GetAtomContribs(mol, force=1)
     return np.array([p[0] for p in params])
