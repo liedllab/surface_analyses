@@ -172,7 +172,7 @@ def main(args=None):
             patches = []
             print('i_frame,i_patch,patch_size[nm^2]')
             for i_frame, surf in enumerate(surfs):
-                area = self.areas()
+                area = surf.areas()
                 pat = find_patches(surf.faces, surf['values'] > args.patch_min)
                 patches.append(pat)
                 for ip, p in enumerate(pat):
