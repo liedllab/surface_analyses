@@ -26,11 +26,14 @@ def main(args=None):
     parser.add_argument('trajs', nargs='+')
     parser.add_argument('--ref', default=None)
     parser.add_argument('--scale', required=True, help=(
-        'Hydrophobicity scale in table format, or "crippen" or "eisenberg", or '
-        'rdkit-crippen". For rdkit-crippen, parm needs to be in PDB format, and '
-        'a SMILES file must be supplied with --smiles.'
+        'Hydrophobicity scale in table format, or "crippen" or "eisenberg", '
+        'rdkit-crippen", or "file". For rdkit-crippen, parm needs to be in PDB '
+        'format, and a SMILES file must be supplied with --smiles. With "file", '
+        'a file with pre-assigned values per atom can be supplied via '
+        '--atom_propensities (single column, one row per atom).'
     ))
     parser.add_argument('--smiles', type=str, help='SMILES for rdkit-crippen. Use e.g. @smiles.txt to read them from a file.')
+    parser.add_argument('--atom_propensities', type=str, help='File with pre-defined atom propensities for "--scale file"')
     parser.add_argument('--out', type=str, required=True, help='Output in .npz format')
     parser.add_argument('--stride', default=1, type=int)
     parser.add_argument('--surftype', help="Controls the grouping of SASA for surface-area based scores (--surfscore, --sap, --sh)", choices=('normal', 'sc_norm', 'atom_norm'), default='normal')
@@ -107,7 +110,12 @@ def main(args=None):
     else:
         grouper = lambda x: x
         coords = traj.xyz
-    if args.scale == 'rdkit-crippen':
+    if args.atom_propensities:
+        assert args.scale == "file", "--atom_propensities must be used with --scale file"
+    if args.scale == 'file':
+        propensities = np.loadtxt(args.atom_propensities)
+        assert len(propensities) == len(atoms), "Number of atom propensities and atoms don't match!"
+    elif args.scale == 'rdkit-crippen':
         if args.smiles is None:
             raise ValueError("--smiles is needed with Scale 'rdkit-crippen'")
         propensities = rdkit_crippen_logp(args.parm, args.smiles)
