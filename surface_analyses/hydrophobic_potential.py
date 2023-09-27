@@ -77,8 +77,8 @@ def heiden_weight(x, rcut, alpha):
     Heiden, W., Moeckel, G., Brickmann, J.; J. Comput. Aided Mol. Des. 7 (1993) 503–514.
     
     This is a Fermi function with a scaling factor such that g(0) is 
-    always 1, and g(rcut/2) is 0.5. Alpha controls how hard the cutoff 
-    is (the higher the steeper)
+    always 1, and g(rcut/2) is 0.5 (if alpha is high enough). Alpha controls
+    how hard the cutoff is (the higher the steeper)
     
     Parameters:
         x: np.ndarray. Distances to compute weights for.
