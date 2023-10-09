@@ -15,7 +15,7 @@ from scipy.spatial import cKDTree
 from gisttools.gist import load_dx
 from mdtraj.core.element import carbon, nitrogen, oxygen, sulfur
 
-from .patches import assign_patches, triangles_area
+from .patches import assign_patches
 from .surface import Surface
 from .surface import color_surface, color_surface_by_group
 from .surface import compute_sas, compute_ses, compute_gauss_surf
@@ -197,7 +197,7 @@ def main(argv=None):
     _, closest_atom = pdbtree.query(surf.vertices)
 
     # Calculate the area of each triangle, and split evenly among the vertices.
-    tri_areas = triangles_area(surf.vertices[surf.faces])
+    tri_areas = surf.areas()
     vert_areas = np.zeros(surf.vertices.shape[0])
     for face, area in zip(surf.faces, tri_areas):
         vert_areas[face] += area/3

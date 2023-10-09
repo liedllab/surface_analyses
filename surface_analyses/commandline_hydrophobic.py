@@ -13,8 +13,8 @@ from .propensities import get_propensity_mapping
 from .prmtop import RawTopology
 from .pdb import PdbAtom
 from .sap import blur as sap_blur
-from .patches import find_patches, triangles_area
-from .surface import color_surface_by_patch, color_surface
+from .patches import find_patches
+from .surface import color_surface_by_patch, color_surface, surfaces_to_dict
 
 def main(args=None):
     print(f"pep_patch_hydrophobic starting at {datetime.datetime.now()}")
@@ -166,20 +166,13 @@ def main(args=None):
             alpha=args.alpha,
             blur_sigma=args.blur_sigma,
         )
-        lists = {
-            'verts': [s.vertices for s in surfs],
-            'faces': [s.faces for s in surfs],
-            'values': [s['values'] for s in surfs],
-            'atom': [s['atom'] for s in surfs],
-            'blurred_lvl': [s['blurred_lvl'] for s in surfs],
-        }
-        output['hydrophobic_potential'] = lists
+        output.update(surfaces_to_dict(surfs, basename="hydrophobic_potential"))
         if args.patches:
             print(f'Starting patch output, patch_min={args.patch_min}')
             patches = []
             print('i_frame,i_patch,patch_size[nm^2]')
             for i_frame, surf in enumerate(surfs):
-                area = triangles_area(surf.vertices[surf.faces])
+                area = surf.areas()
                 pat = find_patches(surf.faces, surf['values'] > args.patch_min)
                 patches.append(pat)
                 for ip, p in enumerate(pat):
@@ -209,6 +202,7 @@ def ply_filenames(basename, n) -> list:
         base + str(i) + ext
         for i in range(n)
     ]
+
 
 def rdkit_crippen_logp(pdb, smiles):
     import rdkit.Chem.AllChem

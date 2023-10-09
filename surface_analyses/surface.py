@@ -69,6 +69,12 @@ class Surface:
     def n_faces(self):
         return len(self.faces)
 
+    def areas(self, selection=None):
+        """Compute area of each triangle in self.faces, possibly using a selection mask."""
+        if selection is None:
+            selection = slice(None)
+        return triangles_area(self.vertices[self.faces[selection]])
+
     def __repr__(self):
         return f"{self.__class__.__name__}({self.n_vertices} vertices, {self.n_faces} faces)"
 
@@ -135,6 +141,105 @@ class Surface:
         )
         vertices += grid.origin
         return cls(vertices, faces)
+
+    @classmethod
+    def from_dict(cls, dictionary, basename="surface"):
+        """Create Surface from arrays in a dictionary or npz file.
+
+        The following keys are expected:
+        * "{basename}:vertices"
+        * "{basename}:faces"
+        * "{basename}:data_entries"
+        data_entries should contain strings. For each element, there should be
+        * "{basename}:data:{element}"
+
+        From those entries, the data dictionary will be created.
+        """
+        vertices = dictionary[f"{basename}:vertices"]
+        faces = dictionary[f"{basename}:faces"]
+        data_entries = dictionary[f"{basename}:data_entries"]
+        out = cls(vertices, faces)
+        for element in data_entries:
+            out[element] = dictionary[f"{basename}:data:{element}"]
+        return out
+
+    def to_dict(self, basename="surface"):
+        """Save this surface into a dictionary, which can be used to save to npz format.
+
+        For the naming convention, see from_dict.
+        """
+        out = {}
+        out[f"{basename}:vertices"] = self.vertices
+        out[f"{basename}:faces"] = self.faces
+        out[f"{basename}:data_entries"] = list(self.data)
+        for element in self.data:
+            out[f"{basename}:data:{element}"] = self.data[element]
+        return out
+
+
+def surfaces_from_dict(dictionary, basename="surfaces"):
+    """Load several surfaces from a dictionary.
+
+    The following keys are expected:
+    * "{basename}:n_surfaces"
+    * Additionally, will attempt to read n_surfaces via Surface.from_dict,
+      each with a basename of {basename}:{index}, where index is from range(n_surfaces).
+      See Surface.from_dict for the naming convention.
+    """
+    n_surfaces = dictionary[f"{basename}:n_surfaces"]
+    surfaces = [
+        Surface.from_dict(dictionary, f"{basename}:{index}")
+        for index in range(n_surfaces)
+    ]
+    return surfaces
+
+
+def surfaces_to_dict(surfaces, basename="surfaces"):
+    """Store several surfaces into a dictionary for saving to npz.
+
+    See surfaces_from_dict for the naming convention.
+    """
+    out = {f"{basename}:n_surfaces": len(surfaces)}
+    for index, surface in enumerate(surfaces):
+        out.update(surface.to_dict(basename=f"{basename}:{index}"))
+    return out
+
+
+def triangles_area(triangles):
+    """Compute area of each triangle in triangles.
+
+    Parameters
+    ----------
+    triangles : np.ndarray, shape=(n_triangles, 3, 3)
+        Eeach triangle must contain 3 rows of xyz coordinates.
+
+    Returns
+    -------
+    areas : np.ndarray, shape=(n_triangles,)
+
+    Examples
+    --------
+    >>> triangles = [[[0., 0., 0.],
+    ...               [0., 0., 3.],
+    ...               [0., 4., 0.]],
+    ...              [[-1, -1, -1],
+    ...               [-1, 0, -1],
+    ...               [3, -1, -1]]]
+    >>> triangles_area(triangles)
+    array([6., 2.])
+    >>> triangles_area([[[0, 0, 0], [1, 1, 1]]])
+    Traceback (most recent call last):
+    AssertionError: shape of triangles must be (n_triangles, 3, 3), not (1, 2, 3).
+    """
+    triangles = np.asarray(triangles)
+    if triangles.size == 0:
+        return 0.
+    assert len(triangles.shape) == 3 and triangles[0].shape == (3, 3), f"shape of triangles must be (n_triangles, 3, 3), not {triangles.shape}."
+    ab = triangles[:, 1, :] - triangles[:, 0, :]
+    ac = triangles[:, 2, :] - triangles[:, 0, :]
+    cross = np.cross(ab, ac, axis=1)
+    cross_abs = np.sqrt(np.sum(cross**2, axis=1))
+    return cross_abs / 2.
 
 
 def compute_sas(
