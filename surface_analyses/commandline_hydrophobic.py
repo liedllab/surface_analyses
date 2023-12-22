@@ -24,7 +24,8 @@ def main(args=None):
     parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
     parser.add_argument('parm')
     parser.add_argument('trajs', nargs='+')
-    parser.add_argument('--ref', default=None)
+    parser.add_argument('--ref', default=None, help="Reference structure with the SAME atoms")
+    parser.add_argument('--protein_ref', default=None, help="Reference structure for protein alignment using TMalign")
     parser.add_argument('--scale', required=True, help=(
         'Hydrophobicity scale in table format, or "crippen" or "eisenberg", '
         'rdkit-crippen", or "file". For rdkit-crippen, parm needs to be in PDB '
@@ -62,11 +63,11 @@ def main(args=None):
             'Compute a hydrophobic potential using the method by Heiden et al. '
             '(J. Comput. Aided Mol. Des. 7, 503–514 (1993)). '
             'A triangulated solvent-excluded surface is created via a marching cubes algorithm '
-            'with given grid spacing (--grid_spacing) and and solvent radius (--solv_rad), '
+            'with given grid spacing (--grid_spacing) and solvent radius (--solv_rad), '
             'and the atomic hydrophobicity values from the scale (--scale) are mapped to it '
             'via a sigmoidal distance weighting function with given cutoff (--rcut) and '
-            'half height of rmax (--rmax). The steepness is controlled by --alpha (higher -> steeper). '
-            'The potential is output to the npz file. Additioanlly, a .ply file can be written '
+            'half height of rcut / 2. The steepness is controlled by --alpha (higher -> steeper). '
+            'The potential is output to the npz file. Additionally, a .ply file can be written '
             'for visualization (--ply_out). By default, it contains the potential values, but can also '
             'contain the patches (--patches).'
         )
@@ -80,6 +81,7 @@ def main(args=None):
     pot_parser.add_argument('--blur_sigma', help='Sigma for distance to gaussian surface [nm]', default=.6, type=float)
     pot_parser.add_argument('--ply_out', help='Output .ply file of first frame for PyMOL')
     pot_parser.add_argument('--ply_cmap', help='Color map for the .ply output')
+    pot_parser.add_argument('--ply_clim', nargs=2, help='Colorscale limits for .ply output.')
     pot_parser.add_argument('--patches', action='store_true', help='Output patches instead of hydrophobic potential')
     pot_parser.add_argument('--patch_min', type=float, default=0.12, help='Minimum vertex value to count as a patch')
     parser.add_argument('-v', '--verbose', action='store_true')
@@ -94,7 +96,8 @@ def main(args=None):
         args.parm,
         args.stride,
         ref=args.ref,
-        sel='not resname HOH'
+        protein_ref=args.protein_ref,
+        sel='not resname HOH',
     )
     logging.info(f"Loaded trajectory: {traj}")
     atoms = get_atoms_list(args.parm)
@@ -188,11 +191,13 @@ def main(args=None):
                     print(f"{i_frame},{ip},{size}")
         if args.ply_out:
             if args.patches:
+                if args.clim:
+                    warnings.warn("--ply_clim is ignored with --patches")
                 for surf, patch in zip(surfs, patches):
                     color_surface_by_patch(surf, patch, cmap=args.ply_cmap)
             else:
                 for surf in surfs:
-                    color_surface(surf, 'values', cmap=args.ply_cmap)
+                    color_surface(surf, 'values', cmap=args.ply_cmap, clim=args.ply_clim)
             fnames = ply_filenames(args.ply_out, len(surfs))
             for surf, fname in zip(surfs, fnames):
                     surf.write_ply(fname, coordinate_scaling=10)
