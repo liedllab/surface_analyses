@@ -75,6 +75,15 @@ class Surface:
             selection = slice(None)
         return triangles_area(self.vertices[self.faces[selection]])
 
+    def vertex_areas(self):
+        """Redistribute the triangle areas to vertices"""
+        face_area = self.areas()
+        return np.bincount(
+            self.faces.ravel(),
+            weights=np.repeat(face_area, 3),
+            minlength=self.n_vertices
+        ) / 3
+
     def __repr__(self):
         return f"{self.__class__.__name__}({self.n_vertices} vertices, {self.n_faces} faces)"
 

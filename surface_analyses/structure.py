@@ -5,11 +5,16 @@ import numpy as np
 from .data import AVERAGE_SIDECHAIN_SAA, ATOM_DATA
 from .tmalign_wrapper import MDTrajSequenceAlignment
 
-def load_aligned_trajectory(filenames, topname, stride, ref, sel):
+def load_aligned_trajectory(filenames, topname, stride, ref, protein_ref, sel):
     traj = load_trajectory(filenames, topname, stride, sel)
+    if ref and protein_ref:
+        raise ValueError("Cannot use two references")
+    if protein_ref is not None:
+        print('Aligning trajectory with TMalign')
+        traj = align_trajectory(traj, protein_ref)
     if ref is not None:
-        print('Aligning trajectory')
-        traj = align_trajectory(traj, ref)
+        ref_traj = md.load(ref)
+        traj.superpose(ref_traj, 0)
     return traj
 
 
