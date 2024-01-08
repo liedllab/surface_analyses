@@ -3,7 +3,7 @@
 
 The electrostatic properties of proteins arise from the number and distribution of polar and charged residues. Electrostatic interactions in proteins play a critical role in numerous processes such as molecular recognition, protein solubility, viscosity, and antibody developability. Thus, characterizing and quantifying electrostatic properties of a protein are prerequisites for understanding these processes. Here, we present PEP-Patch, a tool to visualize and quantify the electrostatic potential on the protein surface in terms of surface patches, denoting separated areas of the surface with a common physical property. 
 
-The tool's main use is to generate a molecular surface, map a potential to this surface and define patches, i.e. connected areas on the surface with all positive or all negative potential values. Currently, the tool supports APBS to directly calcualte electrostatic potentials, any user-supplied potential map, or a  mapping based on hydrophobicity scales.  
+The tool's main uses are to generate a molecular surface, map a potential to this surface, and define patches, i.e. connected areas on the surface with all positive or all negative potential values. Currently, the tool supports APBS to directly calcualte electrostatic potentials, any user-supplied potential map, or a  mapping based on hydrophobicity scales.  
 
 
 ## Installing
