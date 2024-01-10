@@ -3,6 +3,7 @@
 import argparse
 import csv
 from datetime import datetime
+from collections import namedtuple
 import os
 import pathlib
 import pprint
@@ -107,11 +108,28 @@ def main(argv=None):
     )
     parser.add_argument('--gauss_shift', type=float, default=0.1)
     parser.add_argument('--gauss_scale', type=float, default=1.0)
+    parser.add_argument(
+        '--pH',
+        type=float,
+        default=None,
+        help='Specify pH for pdb2pqr calculation. If None, no protonation is performed.',
+    )
+    parser.add_argument(
+        '--ion_species',
+        type=str,
+        nargs="*",
+        default=None,
+        help="Specify ion species and their properties (charge, concentration, and radius). "
+             "Provide values for multiple ion species as charge1, conc1, radius1, charge2, conc2, radius2, etc."
+    )
+
     args = parser.parse_args(argv)
 
     print(f'pep_patch_electrostatic, {datetime.now().strftime("%m/%d/%Y, %H:%M:%S")}\n')
     print('Command line arguments:')
     print(' '.join(sys.argv))
+
+    ion_species = get_ion_species(args)
 
     if args.dx is None and args.apbs_dir is None:
         raise ValueError("Either DX or APBS_DIR must be specified.")
@@ -132,7 +150,7 @@ def main(argv=None):
         if link_position.exists():
             link_position.unlink()
         link_position.symlink_to(link_target)
-        pdb2pqr = run_pdb2pqr(linked_pdb, cwd=run_dir)
+        pdb2pqr = run_pdb2pqr(linked_pdb, cwd=run_dir, pH=args.pH)
         if pdb2pqr.returncode != 0:
             print("Error: pdb2pqr failed:")
             print("pdb2pqr stdout:")
@@ -140,7 +158,7 @@ def main(argv=None):
             print("pdb2pqr stderr:")
             print(pdb2pqr.stderr)
             raise RuntimeError("pdb2pqr failed")
-        add_ions_to_apbs_input(run_dir / "apbs.in")
+        add_ions_to_apbs_input(run_dir / "apbs.in", ion_species)
         apbs = run_apbs("apbs.in", cwd=run_dir)
         if apbs.returncode != 0:
             print("Error: apbs failed")
@@ -272,6 +290,22 @@ def main(argv=None):
         potential_surf.write_ply(args.ply_out + '-potential.ply')
     return
 
+IonSpecies = namedtuple("IonSpecies", "charge concentration  radius")
+
+DEFAULT_ION_SPECIES = [IonSpecies(1.0, 0.1, 2.0), IonSpecies(-1.0, 0.1, 2.0)]
+
+def get_ion_species(commandline_arguments):
+    args = commandline_arguments.ion_species
+    if args is None:
+        return DEFAULT_ION_SPECIES
+    if len(args) % 3 != 0:
+        raise ValueError("Number of arguments for --ion_species must be divisible by 3.")
+    # important to keep this an iterator
+    args_it = (float(arg) for arg in args)
+    species = []
+    for charge, conc, radius in zip(args_it, args_it, args_it):
+        species.append(IonSpecies(charge, conc, radius))
+    return species
 
 def write_patches(df, out, column):
     groups = dict(list(df[df[column] != -1].groupby(column)))
@@ -297,11 +331,14 @@ def biggest_residue_contribution(df):
     )
 
 
-def run_pdb2pqr(pdbfile, cwd=".", ff="AMBER", name_base="apbs"):
+def run_pdb2pqr(pdbfile, cwd=".", ff="AMBER", name_base="apbs", pH=None):
     if not isinstance(cwd, pathlib.Path):
         cwd = pathlib.Path(cwd)
+    command = ["pdb2pqr", f"--ff={ff}", pdbfile, name_base + ".pqr", "--apbs-input", "apbs.in"]
+    if pH is not None:
+        command.extend(["--titration-state-method=propka", f"--with-ph={pH}"])
     process = subprocess.run(
-        ["pdb2pqr", f"--ff={ff}", pdbfile, name_base + ".pqr", "--apbs-input", "apbs.in"],
+        command,
         capture_output=True,
         cwd=cwd,
     )
@@ -317,15 +354,15 @@ def run_apbs(inputfile, cwd="."):
     return process
 
 
-def add_ions_to_apbs_input(fname):
+def add_ions_to_apbs_input(fname, ion_species):
     with open(fname) as f:
         inp = list(f)
     with open(fname, 'w') as f:
         for line in inp:
             f.write(line)
             if line.strip().startswith('temp'):
-                print("    ion charge 1.0 conc 0.1 radius 2.0", file=f)
-                print("    ion charge -1.0 conc 0.1 radius 2.0", file=f)
+                for charge, conc, radius in ion_species:
+                    print(f"    ion charge {charge} conc {conc} radius {radius}", file=f)
 
 
 def check_cdr_patch(pdbtree, cdr_atoms, patch_verts):

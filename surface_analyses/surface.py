@@ -19,6 +19,8 @@ import matplotlib.colors
 import numpy as np
 import plyfile
 
+import msms.wrapper as msms
+
 PLY_DTYPES = {
     "i": "i4",
     "f": "f8",
@@ -251,11 +253,31 @@ def triangles_area(triangles):
     return cross_abs / 2.
 
 
-def compute_sas(
+def compute_sas(grid, xyz, radii, solvent_radius=0.14):
+    """Compute SAS using MSMS or (as fallback), gisttools
+
+    Note
+    ----
+    The grid argument is only used by the gisttools implementation. Also, the
+    SAS using msms is approximate, by using a very small solvent radius.
+    """
+    if msms.msms_available():
+        return compute_sas_msms(xyz, radii, solvent_radius=solvent_radius)
+    else:
+        return compute_sas_gisttools(grid, xyz, radii, solvent_radius=solvent_radius)
+
+
+def compute_sas_msms(centers, radii, solvent_radius):
+    shifted_radii = np.array(radii) + solvent_radius
+    tiny = 0.01
+    return compute_ses_msms(centers, shifted_radii, solvent_radius=tiny)
+
+
+def compute_sas_gisttools(
     grid: Grid,
     centers: np.ndarray,
     radii: np.ndarray,
-    probe_radius: float,
+    solvent_radius: float,
     fill_val: float = 1e4,
     return_buffer: bool = False,
 ):
@@ -268,7 +290,7 @@ def compute_sas(
         the closest point in xyz. For other voxels, contains fill_val.
     centers: np.ndarray, shape=(n_atoms, 3)
     radii: np.ndarray, shape=(n_atoms,)
-    probe_radius: float
+    solvent_radius: float
     fill_val: float
         fill value to use in the grid. Should be higher than any atomic radius
         + fill_radius.
@@ -277,10 +299,23 @@ def compute_sas(
     rmax = np.max(radii) + np.max(grid.delta) * 2
     ind, _, dist = grid.distance_to_spheres(centers, rmax=rmax, radii=radii)
     full_distances[ind] = dist
-    surf = Surface.isosurface(grid, full_distances, probe_radius, "descent")
+    surf = Surface.isosurface(grid, full_distances, solvent_radius, "descent")
     if return_buffer:
         return surf, full_distances
     return surf
+
+
+def compute_ses(grid, xyz, radii, solvent_radius=0.14):
+    """Compute SES using MSMS or (as fallback), gisttools
+
+    Note
+    ----
+    The grid argument is only used by the gisttools implementation.
+    """
+    if msms.msms_available():
+        return compute_ses_msms(xyz, radii, solvent_radius=solvent_radius)
+    else:
+        return compute_ses_gisttools(grid, xyz, radii, solvent_radius=solvent_radius)
 
 
 def ses_grid(grid, xyz, radii, solvent_radius=0.14, fill_val=1e4):
@@ -290,7 +325,7 @@ def ses_grid(grid, xyz, radii, solvent_radius=0.14, fill_val=1e4):
     Returns fill_val where the distance is > rmax.
     Returns -fill_val where the sphere is not excluded.
     """
-    sas, distbuffer = compute_sas(grid, xyz, radii=radii, probe_radius=solvent_radius, return_buffer=True)
+    sas, distbuffer = compute_sas(grid, xyz, radii=radii, solvent_radius=solvent_radius, return_buffer=True)
     outside = distbuffer > solvent_radius
     rmax = np.max(radii) + np.max(grid.delta) * 2
     ind, _, solvent_dist = grid.distance_to_centers(sas.vertices, rmax)
@@ -301,9 +336,17 @@ def ses_grid(grid, xyz, radii, solvent_radius=0.14, fill_val=1e4):
     return distbuffer
 
 
-def compute_ses(grid, xyz, radii, solvent_radius=0.14):
+def compute_ses_gisttools(grid, xyz, radii, solvent_radius=0.14):
     solv_dist = ses_grid(grid, xyz, radii, solvent_radius=solvent_radius)
     return Surface.isosurface(grid, solv_dist, 0., 'ascent')
+
+
+def compute_ses_msms(xyz, radii, solvent_radius=0.14, density=3.0):
+    """Compute a SES using MSMS."""
+    msms_out = msms.run_msms(xyz, radii, probe_radius=solvent_radius, density=density)
+    vertices = msms_out.get_vertex_positions()
+    faces = msms_out.get_face_indices()
+    return Surface(vertices, faces)
 
 
 def compute_gauss_surf(

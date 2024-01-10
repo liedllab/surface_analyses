@@ -3,6 +3,7 @@ scipy
 pandas
 scikit-image
 git+https://github.com/liedllab/gisttools.git
+git+https://github.com/rinikerlab/msms_wrapper.git
 plyfile
 matplotlib>=3.7
 pdb2pqr>=3
