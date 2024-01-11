@@ -20,6 +20,7 @@ from .patches import assign_patches
 from .surface import Surface
 from .surface import color_surface, color_surface_by_group
 from .surface import compute_sas, compute_ses, compute_gauss_surf
+from .structure import load_trajectory_using_commandline_args, add_trajectory_options_to_parser
 
 
 element_radii = {
@@ -33,11 +34,11 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('pdb', type=str)
-    parser.add_argument('dx', type=str, default=None, nargs='?', help="Optional dx file with the electrostatic potential. If this is omitted, you must specify --apbs_dir")
+    add_trajectory_options_to_parser(parser)
+    parser.add_argument('--dx', type=str, default=None, nargs='?', help="Optional dx file with the electrostatic potential. If this is omitted, you must specify --apbs_dir")
     parser.add_argument('--apbs_dir', help="Directory in which intermediate files are stored when running APBS. Will be created if it does not exist.", type=str, default=None)
     parser.add_argument('--probe_radius', type=float, help='probe radius in Angstrom', default=1.4)
-    parser.add_argument('-o', '--out', default=sys.stdout, type=argparse.FileType('w'), help='Output csv file.')
+    parser.add_argument('-o', '--out', default=None, type=str, help='Output csv file.')
     parser.add_argument(
         '-c', '--patch_cutoff',
         type=float,
@@ -128,8 +129,14 @@ def main(argv=None):
     print(f'pep_patch_electrostatic, {datetime.now().strftime("%m/%d/%Y, %H:%M:%S")}\n')
     print('Command line arguments:')
     print(' '.join(sys.argv))
+    if args.out is None:
+        csv_outfile = sys.stdout
+    else:
+        csv_outfile = open(args.out, "w")
 
     ion_species = get_ion_species(args)
+
+    traj = load_trajectory_using_commandline_args(args)
 
     if args.dx is None and args.apbs_dir is None:
         raise ValueError("Either DX or APBS_DIR must be specified.")
@@ -138,47 +145,23 @@ def main(argv=None):
         print("Warning: both DX and APBS_DIR are specified. Will not run APBS "
               "and use the dx file instead.")
 
+    if traj.n_frames != 1:
+        raise ValueError("The electrostatics script only works with a single-frame trajectory.")
+
     if args.dx is not None:
-        dxfile = args.dx
+        gist = load_dx(args.dx, colname='DX')
+        gist.struct = traj[0]
     else:
-        run_dir = pathlib.Path(args.apbs_dir)
-        if not run_dir.is_dir():
-            run_dir.mkdir()
-        link_target = os.path.relpath(args.pdb, run_dir.resolve())
-        linked_pdb = "input.pdb"
-        link_position = run_dir / linked_pdb
-        if link_position.exists():
-            link_position.unlink()
-        link_position.symlink_to(link_target)
-        pdb2pqr = run_pdb2pqr(linked_pdb, cwd=run_dir, pH=args.pH)
-        if pdb2pqr.returncode != 0:
-            print("Error: pdb2pqr failed:")
-            print("pdb2pqr stdout:")
-            print(pdb2pqr.stdout)
-            print("pdb2pqr stderr:")
-            print(pdb2pqr.stderr)
-            raise RuntimeError("pdb2pqr failed")
-        add_ions_to_apbs_input(run_dir / "apbs.in", ion_species)
-        apbs = run_apbs("apbs.in", cwd=run_dir)
-        if apbs.returncode != 0:
-            print("Error: apbs failed")
-            print("apbs stdout:")
-            print(apbs.stdout)
-            print("apbs stderr:")
-            print(apbs.stderr)
-            raise RuntimeError("apbs failed")
-        dxfile = str(run_dir / "apbs.pqr-PE0.dx")
-    gist = load_dx(dxfile, struct=args.pdb, strip_H=False, colname='DX')
+        gist = get_apbs_potential_from_mdtraj(traj, args.apbs_dir, args.pH, ion_species)
     gist['E_dens'] = gist['DX']
     
-    pdb = gist.struct
     # *10 because mdtraj calculates stuff in nanometers instead of Angstrom.
-    radii = 10. * np.array([atom.element.radius for atom in pdb.top.atoms])
+    radii = 10. * np.array([atom.element.radius for atom in traj.top.atoms])
     columns = ['E_dens']
 
     print('Run info:')
     pprint.pprint({
-        '#Atoms': pdb.xyz.shape[1],
+        '#Atoms': traj.n_atoms,
         'Grid dimensions': gist.grid.shape,
         **vars(args),
     })
@@ -198,8 +181,8 @@ def main(argv=None):
         try:
             from .anarci_wrapper.annotation import Annotation
             cdrs = [
-                str(pdb.top.residue(i))
-                for i in Annotation.from_traj(pdb, scheme='chothia').cdr_indices()
+                str(traj.top.residue(i))
+                for i in Annotation.from_traj(traj[0], scheme='chothia').cdr_indices()
             ]
         except ImportError as e:
             print(f"CDR annotation failed with the following error:\n{e}\n"
@@ -209,9 +192,9 @@ def main(argv=None):
             raise RuntimeError("CDR Annotation failed")
     else:
         cdrs = []
-    residues = np.array([str(a.residue) for a in pdb.top.atoms])
+    residues = np.array([str(a.residue) for a in traj.top.atoms])
 
-    pdbtree = cKDTree(pdb.xyz[0] * 10.)
+    pdbtree = cKDTree(traj.xyz[0] * 10.)
     _, closest_atom = pdbtree.query(surf.vertices)
 
     # Calculate the area of each triangle, and split evenly among the vertices.
@@ -252,7 +235,7 @@ def main(argv=None):
             replace_vals[patch_type] = order_map        
         patches.replace(replace_vals, inplace=True)
         
-    output = csv.writer(args.out)
+    output = csv.writer(csv_outfile)
     output.writerow(['type', 'npoints', 'area', 'cdr', 'main_residue'])
     write_patches(patches, output, 'positive')
     write_patches(patches, output, 'negative')
@@ -288,7 +271,9 @@ def main(argv=None):
         potential_surf['values'] = values
         color_surface(potential_surf, 'values', cmap=args.ply_cmap, clim=args.ply_clim)
         potential_surf.write_ply(args.ply_out + '-potential.ply')
-    return
+    # close user output file, but not stdout
+    if args.out is not None:
+        csv_outfile.close()
 
 IonSpecies = namedtuple("IonSpecies", "charge concentration  radius")
 
@@ -306,6 +291,34 @@ def get_ion_species(commandline_arguments):
     for charge, conc, radius in zip(args_it, args_it, args_it):
         species.append(IonSpecies(charge, conc, radius))
     return species
+
+def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
+    run_dir = pathlib.Path(apbs_dir)
+    if not run_dir.is_dir():
+        run_dir.mkdir()
+    pdb_file = run_dir / "input.pdb"
+    traj[0].save_pdb(str(pdb_file))
+    pdb2pqr = run_pdb2pqr(pdb_file, cwd=run_dir, pH=pH)
+    if pdb2pqr.returncode != 0:
+        print("Error: pdb2pqr failed:")
+        print("pdb2pqr stdout:")
+        print(pdb2pqr.stdout)
+        print("pdb2pqr stderr:")
+        print(pdb2pqr.stderr)
+        raise RuntimeError("pdb2pqr failed")
+    add_ions_to_apbs_input(run_dir / "apbs.in", ion_species)
+    apbs = run_apbs("apbs.in", cwd=run_dir)
+    if apbs.returncode != 0:
+        print("Error: apbs failed")
+        print("apbs stdout:")
+        print(apbs.stdout)
+        print("apbs stderr:")
+        print(apbs.stderr)
+        raise RuntimeError("apbs failed")
+    dxfile = str(run_dir / "apbs.pqr-PE0.dx")
+    gist = load_dx(dxfile, colname='DX')
+    gist.struct = traj[0]
+    return gist
 
 def write_patches(df, out, column):
     groups = dict(list(df[df[column] != -1].groupby(column)))

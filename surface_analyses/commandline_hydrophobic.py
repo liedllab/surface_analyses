@@ -8,7 +8,7 @@ import mdtraj as md
 import numpy as np
 
 from .hydrophobic_potential import hydrophobic_potential
-from .structure import load_aligned_trajectory, heavy_atom_grouper, saa_ref
+from .structure import load_trajectory_using_commandline_args, add_trajectory_options_to_parser, heavy_atom_grouper, saa_ref
 from .propensities import get_propensity_mapping
 from .prmtop import RawTopology
 from .pdb import PdbAtom
@@ -22,10 +22,7 @@ def main(args=None):
         args = sys.argv[1:]
     import argparse
     parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
-    parser.add_argument('parm')
-    parser.add_argument('trajs', nargs='+')
-    parser.add_argument('--ref', default=None, help="Reference structure with the SAME atoms")
-    parser.add_argument('--protein_ref', default=None, help="Reference structure for protein alignment using TMalign")
+    add_trajectory_options_to_parser(parser)
     parser.add_argument('--scale', required=True, help=(
         'Hydrophobicity scale in table format, or "crippen" or "eisenberg", '
         'rdkit-crippen", or "file". For rdkit-crippen, parm needs to be in PDB '
@@ -36,7 +33,6 @@ def main(args=None):
     parser.add_argument('--smiles', type=str, help='SMILES for rdkit-crippen. Use e.g. @smiles.txt to read them from a file.')
     parser.add_argument('--atom_propensities', type=str, help='File with pre-defined atom propensities for "--scale file"')
     parser.add_argument('--out', type=str, required=True, help='Output in .npz format')
-    parser.add_argument('--stride', default=1, type=int)
     parser.add_argument('--surftype', help="Controls the grouping of SASA for surface-area based scores (--surfscore, --sap, --sh)", choices=('normal', 'sc_norm', 'atom_norm'), default='normal')
     parser.add_argument('--group_heavy', action='store_true')
 
@@ -91,14 +87,7 @@ def main(args=None):
         logging.basicConfig(level=logging.INFO)
 
     print('Loading Trajectory')
-    traj = load_aligned_trajectory(
-        args.trajs,
-        args.parm,
-        args.stride,
-        ref=args.ref,
-        protein_ref=args.protein_ref,
-        sel='not resname HOH',
-    )
+    traj = load_trajectory_using_commandline_args(args)
     logging.info(f"Loaded trajectory: {traj}")
     atoms = get_atoms_list(args.parm)
     strip_h = args.scale == 'eisenberg' and not args.group_heavy

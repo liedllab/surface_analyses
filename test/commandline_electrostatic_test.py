@@ -25,10 +25,15 @@ TESTS_PATH = Path(os.path.dirname(__file__))
 TRASTUZUMAB_PATH = TESTS_PATH / 'trastuzumab'
 
 
-def run_commandline(pdb, dx, *args, surface_type="sas"):
+def run_commandline(pdb, dx, *args, **kwargs):
     output = io.StringIO()
+    kwargs_list = []
+    for k, v in kwargs.items():
+        kwargs_list.extend(["--" + str(k), str(v)])
+    print(kwargs_list)
     with redirect_stdout(output):
-        main([str(pdb), str(dx), "--surface_type", surface_type] + list(args))
+        # using the pdb as "topology" and "trajectory"
+        main([str(pdb), str(pdb), "--dx", str(dx)] + list(args) + kwargs_list)
     return output.getvalue()
 
 
@@ -47,21 +52,23 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
             -1867.65861091,
         ]
     )
-    args = [
-        TRASTUZUMAB_PATH / 'apbs-input.pdb',
-        TRASTUZUMAB_PATH / 'apbs-potential.dx',
-        '--out',
-        str(TRASTUZUMAB_PATH / 'apbs-patches.csv'),
-    ]
-    kwargs = {'surface_type': 'sas'}
     if with_or_without_cdrs == 'with':
         if shutil.which('hmmscan') is None:
             pytest.skip('hmmscan was not found')
         if not HAS_ANARCI:
             pytest.skip('ANARCI is not available')
-        args.append('--check_cdrs')
-    out_lines = run_commandline(*args, **kwargs)
-    last = out_lines.splitlines()[-1]
+        args = ['--check_cdrs']
+    else:
+        args = []
+    stdout = run_commandline(
+        TRASTUZUMAB_PATH / 'apbs-input.pdb',
+        TRASTUZUMAB_PATH / 'apbs-potential.dx',
+        *args,
+        out=TRASTUZUMAB_PATH / 'apbs-patches.csv',
+        surface_type='sas',
+    )
+    print(stdout)
+    last = stdout.splitlines()[-1]
     integrals = np.array([float(x) for x in last.split()])
     assert np.allclose(expected, integrals)
     patches = pd.read_csv(str(TRASTUZUMAB_PATH / 'apbs-patches.csv'))
@@ -88,10 +95,8 @@ def test_trastuzumab_ply_out():
         str(TRASTUZUMAB_PATH / 'apbs-patches.csv'),
         '--ply_out',
         str(TRASTUZUMAB_PATH / 'apbs'),
-        '--surface_type',
-        'sas',
     ]
-    run_commandline(*args)
+    run_commandline(*args, surface_type="sas")
     # check the number of vertices in the output
     with open(TRASTUZUMAB_PATH / 'apbs-potential.ply') as f:
         if msms.msms_available():

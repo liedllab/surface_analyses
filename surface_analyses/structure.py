@@ -100,3 +100,26 @@ def get_ref_surf(residue, atom):
             return ATOM_DATA[('LYS', 'HZ1')][2]
         else:
             return np.nan
+
+
+def add_trajectory_options_to_parser(parser):
+    """Add parser options for load_trajectory_using_commandline_parser"""
+    parser.add_argument('parm')
+    parser.add_argument('trajs', nargs='+')
+    parser.add_argument('--ref', default=None, help="Reference structure with the SAME atoms")
+    parser.add_argument('--protein_ref', default=None, help="Reference structure for protein alignment using TMalign")
+    parser.add_argument('--stride', default=1, type=int)
+
+
+def load_trajectory_using_commandline_args(args):
+    """Load a trajectory to mdtraj using the options from add_trajectory_options_to_parser.
+    """
+    traj = load_aligned_trajectory(
+        args.trajs,
+        args.parm,
+        args.stride,
+        ref=args.ref,
+        protein_ref=args.protein_ref,
+        sel='not resname HOH',
+    )
+    return traj
