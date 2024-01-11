@@ -28,7 +28,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install flake8 pytest
-        $CONDA/bin/conda install ambertools -c conda-forge
+        $CONDA/bin/conda install ambertools -y -c conda-forge
         export PATH=$CONDA/bin:$PATH
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Lint with flake8
