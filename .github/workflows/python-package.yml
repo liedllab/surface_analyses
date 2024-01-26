@@ -18,17 +18,23 @@ jobs:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
 
+    defaults:
+      run:
+        shell: bash -l {0}
+
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
+    - name: conda environment
+      uses: conda-incubator/setup-miniconda@v2
       with:
-        python-version: ${{ matrix.python-version }}
+        mamba-version: "*"
+        channels: conda-forge,defaults
+        auto-activate-base: true
     - name: Install dependencies
       run: |
-        $CONDA/bin/conda create -y -n my_env python=${{ matrix.python-version }}
-        $CONDA/bin/conda activate my_env
-        conda install ambertools mdtraj flake8 pytest -y -c conda-forge
+        conda create -y -n my_env python=${{ matrix.python-version }}
+        conda activate my_env
+        mamba install ambertools mdtraj flake8 pytest -y
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Lint with flake8
       run: |
