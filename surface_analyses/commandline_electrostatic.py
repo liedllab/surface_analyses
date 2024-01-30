@@ -135,9 +135,9 @@ def main(argv=None):
         csv_outfile = open(args.out, "w")
 
     ion_species = get_ion_species(args)
-
+    
     traj = load_trajectory_using_commandline_args(args)
-
+    
     if args.dx is None and args.apbs_dir is None:
         raise ValueError("Either DX or APBS_DIR must be specified.")
 
@@ -296,7 +296,7 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
     if not run_dir.is_dir():
         run_dir.mkdir()
     pdb_file = run_dir / "input.pdb"
-    traj[0].save_pdb(str(pdb_file))
+    traj[0].save_pdb(str(pdb_file), force_overwrite=True)
     pdb2pqr = run_pdb2pqr("input.pdb", cwd=run_dir, pH=pH)
     if pdb2pqr.returncode != 0:
         print("Error: pdb2pqr failed:")
