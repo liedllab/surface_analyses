@@ -149,31 +149,30 @@ def main(argv=None):
         raise ValueError("The electrostatics script only works with a single-frame trajectory.")
 
     if args.dx is not None:
-        gist = load_dx(args.dx, colname='DX')
-        gist.struct = traj[0]
+        griddata = load_dx(args.dx, colname='DX')
+        griddata.struct = traj[0]
     else:
-        gist = get_apbs_potential_from_mdtraj(traj, args.apbs_dir, args.pH, ion_species)
-    gist['E_dens'] = gist['DX']
+        griddata = get_apbs_potential_from_mdtraj(traj, args.apbs_dir, args.pH, ion_species)
     
     # *10 because mdtraj calculates stuff in nanometers instead of Angstrom.
     radii = 10. * np.array([atom.element.radius for atom in traj.top.atoms])
-    columns = ['E_dens']
+    columns = ['DX']
 
     print('Run info:')
     pprint.pprint({
         '#Atoms': traj.n_atoms,
-        'Grid dimensions': gist.grid.shape,
+        'Grid dimensions': griddata.grid.shape,
         **vars(args),
     })
 
     print('Calculating triangulated SASA')
 
     if args.surface_type == 'sas':
-        surf = compute_sas(gist.grid, gist.coord, radii, args.probe_radius)
+        surf = compute_sas(griddata.grid, griddata.coord, radii, args.probe_radius)
     elif args.surface_type == 'gauss':
-        surf = compute_gauss_surf(gist.grid, gist.coord, radii, args.gauss_shift, args.gauss_scale)
+        surf = compute_gauss_surf(griddata.grid, griddata.coord, radii, args.gauss_shift, args.gauss_scale)
     elif args.surface_type == 'ses':
-        surf = compute_ses(gist.grid, gist.coord, radii, args.probe_radius)
+        surf = compute_ses(griddata.grid, griddata.coord, radii, args.probe_radius)
     else:
         raise ValueError("Unknown surface type: " + str(args.surface_type))
 
@@ -205,7 +204,7 @@ def main(argv=None):
 
     # The patch searching
     print('Finding patches')
-    values = gist.interpolate(columns, surf.vertices)[columns[0]]
+    values = griddata.interpolate(columns, surf.vertices)[columns[0]]
     patches = pd.DataFrame({
         'positive': assign_patches(surf.faces, values > args.patch_cutoff[0]),
         'negative': assign_patches(surf.faces, values < args.patch_cutoff[1]),
@@ -241,11 +240,11 @@ def main(argv=None):
     write_patches(patches, output, 'negative')
 
     # Compute the total solvent-accessible potential.
-    within_range, closest_atom, distance = gist.distance_to_spheres(rmax=10, atomic_radii=radii)
+    within_range, closest_atom, distance = griddata.distance_to_spheres(rmax=10, atomic_radii=radii)
     not_protein = distance > args.probe_radius
     accessible = within_range[not_protein]
-    voxel_volume = gist.grid.voxel_volume
-    accessible_data = gist[columns[0]].values[accessible]
+    voxel_volume = griddata.grid.voxel_volume
+    accessible_data = griddata[columns[0]].values[accessible]
     integral = np.sum(accessible_data) * voxel_volume
     integral_high = np.sum(np.maximum(accessible_data - args.integral_cutoff[0], 0)) * voxel_volume
     integral_pos = np.sum(np.maximum(accessible_data, 0)) * voxel_volume
@@ -316,9 +315,9 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
         print(apbs.stderr)
         raise RuntimeError("apbs failed")
     dxfile = str(run_dir / "apbs.pqr-PE0.dx")
-    gist = load_dx(dxfile, colname='DX')
-    gist.struct = traj[0]
-    return gist
+    griddata = load_dx(dxfile, colname='DX')
+    griddata.struct = traj[0]
+    return griddata
 
 def write_patches(df, out, column):
     groups = dict(list(df[df[column] != -1].groupby(column)))
