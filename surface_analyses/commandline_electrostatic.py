@@ -298,7 +298,7 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
         run_dir.mkdir()
     pdb_file = run_dir / "input.pdb"
     traj[0].save_pdb(str(pdb_file))
-    pdb2pqr = run_pdb2pqr(pdb_file, cwd=run_dir, pH=pH)
+    pdb2pqr = run_pdb2pqr("input.pdb", cwd=run_dir, pH=pH)
     if pdb2pqr.returncode != 0:
         print("Error: pdb2pqr failed:")
         print("pdb2pqr stdout:")
