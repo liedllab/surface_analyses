@@ -180,7 +180,7 @@ def main(args=None):
                     print(f"{i_frame},{ip},{size}")
         if args.ply_out:
             if args.patches:
-                if args.clim:
+                if args.ply_clim:
                     warnings.warn("--ply_clim is ignored with --patches")
                 for surf, patch in zip(surfs, patches):
                     color_surface_by_patch(surf, patch, cmap=args.ply_cmap)
