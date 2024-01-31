@@ -10,6 +10,7 @@ import pprint
 import sys
 import subprocess
 
+
 import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
@@ -22,6 +23,7 @@ from .surface import color_surface, color_surface_by_group
 from .surface import compute_sas, compute_ses, compute_gauss_surf
 from .structure import load_trajectory_using_commandline_args, add_trajectory_options_to_parser
 
+import warnings
 
 element_radii = {
     carbon: 1.8,
@@ -135,14 +137,16 @@ def main(argv=None):
         csv_outfile = open(args.out, "w")
 
     ion_species = get_ion_species(args)
-    
     traj = load_trajectory_using_commandline_args(args)
-    
+    # Renumber residues, takes care of insertion codes in PDB residue numbers
+    for i, res in enumerate(traj.top.residues):
+        res.resSeq = i
+            
     if args.dx is None and args.apbs_dir is None:
         raise ValueError("Either DX or APBS_DIR must be specified.")
 
     if args.dx is not None and args.apbs_dir is not None:
-        print("Warning: both DX and APBS_DIR are specified. Will not run APBS "
+        warnings.warn("Warning: both DX and APBS_DIR are specified. Will not run APBS "
               "and use the dx file instead.")
 
     if traj.n_frames != 1:
