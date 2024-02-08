@@ -139,7 +139,7 @@ def main(argv=None):
     ion_species = get_ion_species(args)
     traj = load_trajectory_using_commandline_args(args)
     # Renumber residues, takes care of insertion codes in PDB residue numbers
-    for i, res in enumerate(traj.top.residues):
+    for i, res in enumerate(traj.top.residues,start=1):
         res.resSeq = i
             
     if args.dx is None and args.apbs_dir is None:
