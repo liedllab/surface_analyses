@@ -229,8 +229,13 @@ def main(argv=None):
         'area': vert_areas,
         'atom': closest_atom,
         'residue': residues[closest_atom],
-        'cdr': np.isin(residues, cdrs)[closest_atom]
+        'cdr': np.isin(residues, cdrs)[closest_atom],
+        'value': values,
     })
+
+    # save values and atom in surf for consistency with commandline_hydrophobic
+    surf['values'] = values
+    surf['atom'] = closest_atom
     
     #keep args.n_patches largest patches (n > 0) or smallest patches (n < 0) or patches with an area over the size cutoff
     if args.n_patches != 0 or args.size_cutoff != 0: 
@@ -288,7 +293,19 @@ def main(argv=None):
         potential_surf['values'] = values
         color_surface(potential_surf, 'values', cmap=args.ply_cmap, clim=args.ply_clim)
         potential_surf.write_ply(args.ply_out + '-potential.ply')
-    return
+
+    return {
+        'surface': surf.to_dict(),
+        'integrals': {
+            'integral': integral,
+            'integral_high': integral_high,
+            'integral_pos': integral_pos,
+            'integral_neg': integral_neg,
+            'integral_low': integral_low,
+        },
+        'patch_vertices': patches.query(f'positive != -1 or negative != -1'),
+    }
+
 
 IonSpecies = namedtuple("IonSpecies", "charge concentration  radius")
 

@@ -202,6 +202,7 @@ def main(args=None):
             for surf, fname in zip(surfs, fnames):
                     surf.write_ply(fname, coordinate_scaling=10)
     np.savez(args.out, **output)
+    return output
 
 
 def ply_filenames(basename, n) -> list:
