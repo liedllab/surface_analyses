@@ -4,7 +4,6 @@ import argparse
 import csv
 from datetime import datetime
 from collections import namedtuple
-from genericpath import isfile
 import os
 import pathlib
 import pprint
