@@ -318,7 +318,12 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
         print("apbs stderr:")
         print(apbs.stderr)
         raise RuntimeError("apbs failed")
-    dxfile = str(run_dir / "apbs.pqr-PE0.dx")
+    if (run_dir / "apbs.pqr-PE0.dx").is_file():
+        dxfile = str(run_dir / "apbs.pqr-PE0.dx")
+    elif (run_dir / "apbs.pqr.dx").is_file():
+        dxfile = str(run_dir / "apbs.pqr.dx")
+    else:
+        raise ValueError("Neither apbs.pqr-PE0.dx nor apbs.pqr.dx were found in the apbs directory.")
     griddata = load_dx(dxfile, colname='DX')
     griddata.struct = traj[0]
     return griddata
