@@ -22,9 +22,15 @@ It then creates a molecular surface and colors it by the potential, or searches
 for positive and negative surface patches.
 
 `pep_patch_electrostatic` is presented in "PEP-Patch: Electrostatics in Protein-Protein Recognition, Specificity and Antibody Developability".
-To reproduce the values in the paper, use an input like the following:
+To reproduce the values in the paper, use version 0.2.0 and the input examples provided in the Supporting Information of the application note.
+In newer versions, the input now allows for loading MD trajectory data with the ```mdtraj``` library:
 ```
-pep_patch_electrostatic input.pdb --apbs_dir apbs --ply_out potential -o patches.csv
+pep_patch_electrostatic PARM CRD --apbs_dir apbs --ply_out potential -o patches.csv
+```
+with PARM specyfing a ```mdtraj``` compatible topology file and CRD a coordinate file.
+To use a pdb file as input, simply add it as both PARM and CRD to the input:
+```
+pep_patch_electrostatic input.pdb input.pdb --apbs_dir apbs --ply_out potential -o patches.csv
 ```
 Additionally, you can use `--ply_cmap` to set the cmap for the (continuous) .ply file output, and `--pos_patch_cmap`
 and `--neg_patch_cmap` to set the color map for the patch .ply files.
