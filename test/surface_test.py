@@ -35,3 +35,9 @@ def test_gaussian_grid_variable_sigma():
     grid = Grid([-1, 0, 0], [3, 1, 1], 1)
     out = surf.gaussian_grid_variable_sigma(grid, [[-0.5, 0, 0]], [0.3], [2])
     assert np.allclose(out.ravel(), np.exp([-0.5**2/2/0.3**2, -0.5**2/2/0.3**2, -1.5**2/2/0.3**2]))
+
+def test_ses_gisttools():
+    grid = Grid.centered(0, 100, 0.05)
+    out = surf.compute_ses_gisttools(grid, [[0.0, 0.0, 0.0]], [1.0])
+    # area of a unit sphere is 4*pi = 12.566, but we are not really exact
+    assert np.isclose(out.areas().sum(), 12.5876)

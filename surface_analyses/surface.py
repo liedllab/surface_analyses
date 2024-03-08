@@ -325,7 +325,7 @@ def ses_grid(grid, xyz, radii, solvent_radius=0.14, fill_val=1e4):
     Returns fill_val where the distance is > rmax.
     Returns -fill_val where the sphere is not excluded.
     """
-    sas, distbuffer = compute_sas(grid, xyz, radii=radii, solvent_radius=solvent_radius, return_buffer=True)
+    sas, distbuffer = compute_sas_gisttools(grid, xyz, radii=radii, solvent_radius=solvent_radius, return_buffer=True)
     outside = distbuffer > solvent_radius
     rmax = np.max(radii) + np.max(grid.delta) * 2
     ind, _, solvent_dist = grid.distance_to_centers(sas.vertices, rmax)
