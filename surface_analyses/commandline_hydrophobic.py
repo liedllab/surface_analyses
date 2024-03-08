@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+
+import argparse
 import datetime
 import logging
 import sys
@@ -18,12 +21,25 @@ from .surface import color_surface_by_patch, color_surface, surfaces_to_dict
 
 def main(args=None):
     print(f"pep_patch_hydrophobic starting at {datetime.datetime.now()}")
-    if args is None:
-        args = sys.argv[1:]
-    import argparse
-    parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
+    print('Command line arguments:')
+    print(' '.join(args or sys.argv))
+    args = parse_args(args)
+    traj = load_trajectory_using_commandline_args(args)
+    # trajectory-related arguments are not passed to run_hydrophobic
+    # Note: in contrast to commandline_electrostatic, *parm* IS passed to
+    # run_hydrophobic
+    parm = args.parm
+    del args.parm, args.trajs, args.stride, args.ref, args.protein_ref
+    run_hydrophobic(parm, traj, **vars(args))
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        fromfile_prefix_chars='@',
+    )
     add_trajectory_options_to_parser(parser)
-    parser.add_argument('--scale', required=True, help=(
+    parser.add_argument('--scale', help=(
         'Hydrophobicity scale in table format, or "crippen" or "eisenberg", '
         'rdkit-crippen", or "file". For rdkit-crippen, parm needs to be in PDB '
         'format, and a SMILES file must be supplied with --smiles. With "file", '
@@ -32,9 +48,19 @@ def main(args=None):
     ))
     parser.add_argument('--smiles', type=str, help='SMILES for rdkit-crippen. Use e.g. @smiles.txt to read them from a file.')
     parser.add_argument('--atom_propensities', type=str, help='File with pre-defined atom propensities for "--scale file"')
-    parser.add_argument('--out', type=str, required=True, help='Output in .npz format')
-    parser.add_argument('--surftype', help="Controls the grouping of SASA for surface-area based scores (--surfscore, --sap, --sh)", choices=('normal', 'sc_norm', 'atom_norm'), default='normal')
-    parser.add_argument('--group_heavy', action='store_true')
+    parser.add_argument('--out', type=str, help='Output in .npz format')
+    parser.add_argument(
+        '--surftype',
+        help=(
+            "Controls the grouping of SASA for surface-area based scores (--surfscore, "
+            "--sap, --sh). normal: no normalization is performed. sc_norm: normalization "
+            "is performed per side-chain. atom_norm: normalization is performed per atom. "
+            "sc_norm and atom_norm assumes that only standard residues occur."
+        ),
+        choices=('normal', 'sc_norm', 'atom_norm'),
+        default='normal',
+    )
+    parser.add_argument('--group_heavy', action='store_true', help="Assign hydrogen SASA to the previous heavy atom.")
 
     surfscore_parser = parser.add_argument_group('Surface Score related options')
     surfscore_parser.add_argument('--surfscore', action='store_true')
@@ -81,54 +107,87 @@ def main(args=None):
     pot_parser.add_argument('--patches', action='store_true', help='Output patches instead of hydrophobic potential')
     pot_parser.add_argument('--patch_min', type=float, default=0.12, help='Minimum vertex value to count as a patch')
     parser.add_argument('-v', '--verbose', action='store_true')
-    args = parser.parse_args(args)
+    return parser.parse_args(argv)
 
-    if args.verbose:
+
+def run_hydrophobic(
+    parm: str,
+    traj: md.Trajectory,
+    scale: str = None,  # required
+    smiles: str = None,
+    atom_propensities: str = None,
+    out: str = None,  # required
+    surftype: str = 'normal',  # normal, sc_norm, atom_norm
+    group_heavy: bool = False,
+    # surfscore_parser
+    surfscore: bool = False,
+    # sap_parser
+    sap: bool = False,
+    blur_rad: float = 0.5,
+    # sh_parser
+    sh: bool = False,
+    sh_rad: float = 0.8,
+    # pot_parser
+    potential: bool = False,
+    rmax: float = 0.3,
+    solv_rad: float = 0.14,
+    grid_spacing: float = 0.05,
+    rcut: float = 0.5,
+    alpha: float = 15.,
+    blur_sigma: float = 0.6,
+    ply_out: str = None,
+    ply_cmap: str = None,
+    ply_clim: tuple = None,
+    patches: bool = False,
+    patch_min: float = 0.12,
+    verbose: bool = False,
+):
+    if verbose:
         logging.basicConfig(level=logging.INFO)
-
-    print('Loading Trajectory')
-    traj = load_trajectory_using_commandline_args(args)
-    logging.info(f"Loaded trajectory: {traj}")
-    atoms = get_atoms_list(args.parm)
-    strip_h = args.scale == 'eisenberg' and not args.group_heavy
+    if scale is None:
+        raise ValueError("scale is a required argument.")
+    if out is None:
+        raise ValueError("out is a required argument.")
+    atoms = get_atoms_list(parm)
+    strip_h = scale == 'eisenberg' and not group_heavy
     if strip_h:
         logging.info("Stripping hydrogen atoms")
         atoms = [a for a in atoms if a.is_heavy]
         traj = traj.atom_slice(traj.top.select('not element H'))
-    print(f'Loaded {traj.n_frames} frames with {traj.n_atoms} atoms.')
-    if args.group_heavy:
+    print(f'Using a trajectory with {traj.n_frames} frames with {traj.n_atoms} atoms.')
+    if group_heavy:
         grouper = heavy_atom_grouper(atoms)
         coords = traj.atom_slice(traj.top.select('not element H')).xyz
     else:
         grouper = lambda x: x
         coords = traj.xyz
-    if args.atom_propensities:
-        assert args.scale == "file", "--atom_propensities must be used with --scale file"
-    if args.scale == 'file':
-        propensities = np.loadtxt(args.atom_propensities)
+    if atom_propensities:
+        assert scale == "file", "--atom_propensities must be used with --scale file"
+    if scale == 'file':
+        propensities = np.loadtxt(atom_propensities)
         assert len(propensities) == len(atoms), "Number of atom propensities and atoms don't match!"
-    elif args.scale == 'rdkit-crippen':
-        if args.smiles is None:
+    elif scale == 'rdkit-crippen':
+        if smiles is None:
             raise ValueError("--smiles is needed with Scale 'rdkit-crippen'")
-        propensities = rdkit_crippen_logp(args.parm, args.smiles)
+        propensities = rdkit_crippen_logp(parm, smiles)
     else:
-        propensity_map = get_propensity_mapping(args.scale)
+        propensity_map = get_propensity_mapping(scale)
         propensities = np.asarray(grouper([propensity_map(a) for a in atoms]))
-        if args.smiles is not None:
+        if smiles is not None:
             warnings.warn("--smiles specified but not used.")
     output = {}
     output['propensities'] = propensities
-    if any((args.sap, args.surfscore)):
+    if any((sap, surfscore)):
         print('Computing SAA')
         saa_unref = grouper(md.shrake_rupley(traj))
-        ref = grouper(saa_ref(traj, atoms, args.surftype))
+        ref = grouper(saa_ref(traj, atoms, surftype))
         output['saa_unref'] = saa_unref
         saa = saa_unref / ref
         output['saa'] = saa
-    if args.surfscore:
+    if surfscore:
         print('Computing Surface score')
         output['surfscore'] = saa * propensities[np.newaxis, :]
-    if args.sh:
+    if sh:
         print('Computing Surrounding Hydrophobicity')
         i_res = np.array([a.residue_id for a in atoms])
         print(i_res)
@@ -141,56 +200,56 @@ def main(args=None):
         sh_per_atom = []
         propensities_ca = propensities[ca[has_ca]]
         for frame in coords[:, ca[has_ca]]:
-            sh_ca = sap_blur(frame, propensities[ca[has_ca]], args.sh_rad)
+            sh_ca = sap_blur(frame, propensities[ca[has_ca]], sh_rad)
             # remove self-interaction in the surrounding hydrophobicity
             sh_ca -= propensities_ca
             sh_per_residue = np.zeros(n_res, dtype=float)
             sh_per_residue[has_ca] = sh_ca
             sh_per_atom.append(sh_per_residue[i_res])
         output['surrounding_hydrophobicity'] = np.array(sh_per_atom)
-    if args.sap:
+    if sap:
         print('Applying SAP blur')
         output['sap'] = np.array([
-            sap_blur(frame, frame_saa * propensities, args.blur_rad)
+            sap_blur(frame, frame_saa * propensities, blur_rad)
             for frame, frame_saa in zip(coords, saa)
         ])
-    if args.potential:
+    if potential:
         print('Applying Hydrophobic potential')
         surfs = hydrophobic_potential(
             traj,
             propensities,
-            rmax=args.rmax,
-            spacing=args.grid_spacing,
-            solv_rad=args.solv_rad,
-            rcut=args.rcut,
-            alpha=args.alpha,
-            blur_sigma=args.blur_sigma,
+            rmax=rmax,
+            spacing=grid_spacing,
+            solv_rad=solv_rad,
+            rcut=rcut,
+            alpha=alpha,
+            blur_sigma=blur_sigma,
         )
         output.update(surfaces_to_dict(surfs, basename="hydrophobic_potential"))
-        if args.patches:
-            print(f'Starting patch output, patch_min={args.patch_min}')
+        if patches:
+            print(f'Starting patch output, patch_min={patch_min}')
             patches = []
             print('i_frame,i_patch,patch_size[nm^2]')
             for i_frame, surf in enumerate(surfs):
                 area = surf.areas()
-                pat = find_patches(surf.faces, surf['values'] > args.patch_min)
+                pat = find_patches(surf.faces, surf['values'] > patch_min)
                 patches.append(pat)
                 for ip, p in enumerate(pat):
                     size = area[p].sum()
                     print(f"{i_frame},{ip},{size}")
-        if args.ply_out:
-            if args.patches:
-                if args.ply_clim:
+        if ply_out:
+            if patches:
+                if ply_clim:
                     warnings.warn("--ply_clim is ignored with --patches")
                 for surf, patch in zip(surfs, patches):
-                    color_surface_by_patch(surf, patch, cmap=args.ply_cmap)
+                    color_surface_by_patch(surf, patch, cmap=ply_cmap)
             else:
                 for surf in surfs:
-                    color_surface(surf, 'values', cmap=args.ply_cmap, clim=args.ply_clim)
-            fnames = ply_filenames(args.ply_out, len(surfs))
+                    color_surface(surf, 'values', cmap=ply_cmap, clim=ply_clim)
+            fnames = ply_filenames(ply_out, len(surfs))
             for surf, fname in zip(surfs, fnames):
                     surf.write_ply(fname, coordinate_scaling=10)
-    np.savez(args.out, **output)
+    np.savez(out, **output)
     return output
 
 

@@ -2,7 +2,7 @@
 
 import argparse
 import csv
-from datetime import datetime
+import datetime
 from collections import namedtuple
 import os
 import pathlib
@@ -35,7 +35,7 @@ element_radii = {
 
 
 def main(args=None):
-    print(f'pep_patch_electrostatic, {datetime.now().strftime("%m/%d/%Y, %H:%M:%S")}\n')
+    print(f'pep_patch_electrostatic starting at {datetime.datetime.now()}')
     print('Command line arguments:')
     print(' '.join(args or sys.argv))
     args = parse_args(args)
@@ -46,7 +46,10 @@ def main(args=None):
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        fromfile_prefix_chars='@',
+    )
     add_trajectory_options_to_parser(parser)
     parser.add_argument('--dx', type=str, default=None, nargs='?', help="Optional dx file with the electrostatic potential. If this is omitted, you must specify --apbs_dir")
     parser.add_argument('--apbs_dir', help="Directory in which intermediate files are stored when running APBS. Will be created if it does not exist.", type=str, default=None)

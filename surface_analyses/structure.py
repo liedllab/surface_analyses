@@ -1,4 +1,6 @@
 from itertools import chain
+import logging
+
 import mdtraj as md
 import numpy as np
 
@@ -114,12 +116,15 @@ def add_trajectory_options_to_parser(parser):
 def load_trajectory_using_commandline_args(args):
     """Load a trajectory to mdtraj using the options from add_trajectory_options_to_parser.
     """
+    fname = args.trajs
+    logging.info(f"Start loading trajectory {fname}")
     traj = load_aligned_trajectory(
-        args.trajs,
+        fname,
         args.parm,
         args.stride,
         ref=args.ref,
         protein_ref=args.protein_ref,
         sel='not resname HOH',
     )
+    logging.info(f"Loaded trajectory: {traj}")
     return traj
