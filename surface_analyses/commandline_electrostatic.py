@@ -330,7 +330,7 @@ def run_electrostatics(
             'integral_neg': integral_neg,
             'integral_low': integral_low,
         },
-        'patch_vertices': patches.query(f'positive != -1 or negative != -1'),
+        'patch_vertices': patches,
     }
 
 
