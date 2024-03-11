@@ -116,7 +116,7 @@ def run_hydrophobic(
     scale: str = None,  # required
     smiles: str = None,
     atom_propensities: str = None,
-    out: str = None,  # required
+    out: str = None,
     surftype: str = 'normal',  # normal, sc_norm, atom_norm
     group_heavy: bool = False,
     # surfscore_parser
@@ -146,8 +146,6 @@ def run_hydrophobic(
         logging.basicConfig(level=logging.INFO)
     if scale is None:
         raise ValueError("scale is a required argument.")
-    if out is None:
-        raise ValueError("out is a required argument.")
     atoms = get_atoms_list(parm)
     strip_h = scale == 'eisenberg' and not group_heavy
     if strip_h:
@@ -249,7 +247,8 @@ def run_hydrophobic(
             fnames = ply_filenames(ply_out, len(surfs))
             for surf, fname in zip(surfs, fnames):
                     surf.write_ply(fname, coordinate_scaling=10)
-    np.savez(out, **output)
+    if out is not None:
+        np.savez(out, **output)
     return output
 
 
