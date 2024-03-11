@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from surface_analyses.commandline_electrostatic import main, biggest_residue_contribution
+from surface_analyses.commandline_electrostatic import main, biggest_residue_contribution, parse_args, run_electrostatics
 from contextlib import redirect_stdout
+import inspect
 import io
 from pathlib import Path
 import os
@@ -25,6 +26,12 @@ TESTS_PATH = Path(os.path.dirname(__file__))
 TRASTUZUMAB_PATH = TESTS_PATH / 'trastuzumab'
 
 
+def get_parameter_list(fun):
+    "Return all parameters that can be passed to a function."
+    params = inspect.signature(fun).parameters
+    return dict(params)
+
+
 def run_commandline(pdb, dx, *args, **kwargs):
     output = io.StringIO()
     kwargs_list = []
@@ -36,6 +43,19 @@ def run_commandline(pdb, dx, *args, **kwargs):
         main([str(pdb), str(pdb), "--dx", str(dx)] + list(args) + kwargs_list)
     return output.getvalue()
 
+
+def test_parser_options_match_python_interface():
+    parser_options = vars(parse_args("top.parm7 traj.nc".split()))
+    parser_options.pop('parm')
+    parser_options.pop('trajs')
+    parser_options.pop('ref')
+    parser_options.pop('protein_ref')
+    parser_options.pop('stride')
+    python_options = get_parameter_list(run_electrostatics)
+    python_options.pop('traj')
+    assert set(python_options) == set(parser_options)
+    for opt in parser_options:
+        assert parser_options[opt] == python_options[opt].default
 
 @pytest.fixture(params=['without', 'with'])
 def with_or_without_cdrs(request):

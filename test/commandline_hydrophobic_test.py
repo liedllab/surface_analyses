@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from collections import namedtuple
 from pathlib import Path
+import inspect
 import os.path
 import shutil
 import tempfile
@@ -9,7 +10,7 @@ import tempfile
 import pytest
 import numpy as np
 
-from surface_analyses.commandline_hydrophobic import main
+from surface_analyses.commandline_hydrophobic import main, parse_args, run_hydrophobic
 
 TrastuzumabRun = namedtuple('TrastuzumabRun', 'scale method expected_data')
 
@@ -23,6 +24,29 @@ TESTS_PATH = Path(os.path.dirname(__file__))
 TRASTUZUMAB_PATH = TESTS_PATH / 'trastuzumab'
 
 CsA_SMILES = 'CCC1C(=O)N(CC(=O)N(C(C(=O)NC(C(=O)N(C(C(=O)NC(C(=O)NC(C(=O)N(C(C(=O)N(C(C(=O)N(C(C(=O)N(C(C(=O)N1)C(C(C)CC=CC)O)C)C(C)C)C)CC(C)C)C)CC(C)C)C)C)C)CC(C)C)C)C(C)C)CC(C)C)C)C'
+
+
+def get_parameter_list(fun):
+    "Return all parameters that can be passed to a function."
+    params = inspect.signature(fun).parameters
+    return dict(params)
+
+
+def test_parser_options_match_python_interface():
+    parser_options = vars(parse_args("top.parm7 traj.nc".split()))
+    # parm is popped from both, since a value (top.parm7) is set
+    parser_options.pop('parm')
+    parser_options.pop('trajs')
+    parser_options.pop('ref')
+    parser_options.pop('protein_ref')
+    parser_options.pop('stride')
+    python_options = get_parameter_list(run_hydrophobic)
+    python_options.pop('parm')
+    python_options.pop('traj')
+    assert set(python_options) == set(parser_options)
+    for opt in parser_options:
+        assert parser_options[opt] == python_options[opt].default
+
 
 @pytest.fixture(params=ALL_RUNS)
 def trastuzumab_run(request):
