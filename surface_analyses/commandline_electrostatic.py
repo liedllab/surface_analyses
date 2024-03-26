@@ -410,7 +410,7 @@ def biggest_residue_contribution(df):
 def run_pdb2pqr(pdbfile, cwd=".", ff="AMBER", name_base="apbs", pH=None):
     if not isinstance(cwd, pathlib.Path):
         cwd = pathlib.Path(cwd)
-    command = ["pdb2pqr", f"--ff={ff}", pdbfile, name_base + ".pqr", "--apbs-input", "apbs.in"]
+    command = ["pdb2pqr", f"--ff={ff}", pdbfile, name_base + ".pqr", "--apbs-input", "apbs.in", "--whitespace"]
     if pH is not None:
         command.extend(["--titration-state-method=propka", f"--with-ph={pH}"])
     process = subprocess.run(
