@@ -289,7 +289,7 @@ def run_electrostatics(
 
     # output patches information
     output = csv.writer(csv_outfile)
-    output.writerow(['nr', 'type', 'npoints', 'area', 'cdr', 'main_residue'])
+    output.writerow(['nr', 'type', 'npoints', 'area', 'value', 'cdr', 'main_residue'])
     write_patches(patches, output)
 
     # output residues involved in each patch
@@ -407,6 +407,7 @@ def write_patches(df, out, cols=['positive','negative']):
                 column,
                 len(patch),
                 patch['area'].sum(),
+                patch['value'].sum(),
                 np.any(patch['cdr']),
                 biggest_residue_contribution(patch)
             ])
