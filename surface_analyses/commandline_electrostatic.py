@@ -55,6 +55,7 @@ def parse_args(argv=None):
     parser.add_argument('--apbs_dir', help="Directory in which intermediate files are stored when running APBS. Will be created if it does not exist.", type=str, default=None)
     parser.add_argument('--probe_radius', type=float, help='probe radius in Angstrom', default=1.4)
     parser.add_argument('-o', '--out', default=None, type=str, help='Output csv file.')
+    parser.add_argument('-ro', '--resout', default=None, type=str, help='Residue csv file.')
     parser.add_argument(
         '-c', '--patch_cutoff',
         type=float,
@@ -148,6 +149,7 @@ def run_electrostatics(
     apbs_dir: str = None,
     probe_radius: float = 1.4,
     out: str = None,
+    resout: str = None,
     patch_cutoff: tuple = (2., -2.),
     integral_cutoff: tuple = (0.3, -0.3),
     surface_type: str = "sas",
@@ -173,6 +175,11 @@ def run_electrostatics(
         csv_outfile = sys.stdout
     else:
         csv_outfile = open(out, "w")
+
+    if resout is None:
+        res_outfile = sys.stdout
+    else:
+        res_outfile = open(resout, "w")
 
     ion_species = get_ion_species(ion_species)
     # Renumber residues, takes care of insertion codes in PDB residue numbers
@@ -280,10 +287,15 @@ def run_electrostatics(
             replace_vals[patch_type] = order_map
         patches.replace(replace_vals, inplace=True)
 
+    # output patches information
     output = csv.writer(csv_outfile)
-    output.writerow(['type', 'npoints', 'area', 'cdr', 'main_residue'])
-    write_patches(patches, output, 'positive')
-    write_patches(patches, output, 'negative')
+    output.writerow(['nr', 'type', 'npoints', 'area', 'cdr', 'main_residue'])
+    write_patches(patches, output)
+
+    # output residues involved in each patch
+    residue_output = csv.writer(res_outfile)
+    residue_output.writerow(['nr', 'residues'])
+    write_residues(patches, residue_output)
 
     # Compute the total solvent-accessible potential.
     within_range, closest_atom, distance = griddata.distance_to_spheres(rmax=10, atomic_radii=radii)
@@ -320,6 +332,8 @@ def run_electrostatics(
     # close user output file, but not stdout
     if out is not None:
         csv_outfile.close()
+    if resout is not None:
+        res_outfile.close()
 
     return {
         'surface': surf,
@@ -383,18 +397,31 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
     griddata.struct = traj[0]
     return griddata
 
-def write_patches(df, out, column):
-    groups = dict(list(df[df[column] != -1].groupby(column)))
-    for patch in sorted(groups.values(), key=lambda df: -df['area'].sum()):
-        out.writerow([
-            column,
-            len(patch),
-            patch['area'].sum(),
-            np.any(patch['cdr']),
-            biggest_residue_contribution(patch),
-        ])
+def write_patches(df, out, cols=['positive','negative']):
+    ix = 1
+    for column in cols:
+        groups = dict(list(df[df[column] != -1].groupby(column)))
+        for patch in sorted(groups.values(), key=lambda df: -df['area'].sum()):
+            out.writerow([
+                ix,
+                column,
+                len(patch),
+                patch['area'].sum(),
+                np.any(patch['cdr']),
+                biggest_residue_contribution(patch)
+            ])
+            ix += 1
 
-
+def write_residues(df, out, cols=['positive','negative']):
+    ix = 1
+    for column in cols:
+        groups = dict(list(df[df[column] != -1].groupby(column)))
+        for patch in sorted(groups.values(), key=lambda df: -df['area'].sum()):
+            out.writerow([
+                ix, ' '.join(sorted(patch['residue'].unique(), key=lambda x: int(x[3:])))
+            ])
+            ix += 1
+            
 def biggest_residue_contribution(df):
     """Find the element in df['residue'] with the highest total contribution in df['area']."""
     return (
@@ -405,7 +432,6 @@ def biggest_residue_contribution(df):
         .sort_values()
         .index[-1]
     )
-
 
 def run_pdb2pqr(pdbfile, cwd=".", ff="AMBER", name_base="apbs", pH=None):
     if not isinstance(cwd, pathlib.Path):
