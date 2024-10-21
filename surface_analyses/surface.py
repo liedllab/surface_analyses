@@ -18,6 +18,7 @@ import matplotlib.cm
 import matplotlib.colors
 import numpy as np
 import plyfile
+import pandas as pd
 
 import msms.wrapper as msms
 
@@ -187,6 +188,15 @@ class Surface:
             out[f"{basename}:data:{element}"] = self.data[element]
         return out
 
+    def vertices_to_df(self):
+        """
+        Output surface vertices and data as pandas DataFrame
+        """
+        out = {}
+        out['x'], out['y'], out['z'] = self.vertices.T
+        for element in self.data:
+            out[f"{element}"] = self.data[element]
+        return pd.DataFrame(out)
 
 def surfaces_from_dict(dictionary, basename="surfaces"):
     """Load several surfaces from a dictionary.

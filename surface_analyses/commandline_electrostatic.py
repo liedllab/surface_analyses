@@ -253,25 +253,23 @@ def run_electrostatics(
     # The patch searching
     print('Finding patches')
     values = griddata.interpolate(columns, surf.vertices)[columns[0]]
-    patches = pd.DataFrame({
-        'positive': assign_patches(surf.faces, values > patch_cutoff[0]),
-        'negative': assign_patches(surf.faces, values < patch_cutoff[1]),
-        'area': vert_areas,
-        'atom': closest_atom,
-        'residue': residues[closest_atom],
-        'cdr': np.isin(residues, cdrs)[closest_atom],
-        'value': values,
-    })
-
+   
     # save values and atom in surf for consistency with commandline_hydrophobic
+    surf['positive'] = assign_patches(surf.faces, values > patch_cutoff[0])
+    surf['negative'] = assign_patches(surf.faces, values < patch_cutoff[1]) + max(surf['positive'])
     surf['values'] = values
     surf['atom'] = closest_atom
+    surf['area'] = vert_areas
+    surf['residue'] = np.array(residues[closest_atom])
+    surf['cdr'] = np.isin(residues, cdrs)[closest_atom]
 
+    patches = surf.vertices_to_df()
     #keep args.n_patches largest patches (n > 0) or smallest patches (n < 0) or patches with an area over the size cutoff
     if n_patches != 0 or size_cutoff != 0:
         #interesting interaction: setting a -n cutoff and size cutoff should yield the n smallest patches with an area over the size cutoff
         replace_vals = {}
-        for patch_type in ('negative', 'positive'):
+        max_previous = 0
+        for patch_type in ('positive', 'negative'):
             # sort patches by area and filter top n patches (or bottom n patches for n < 0)
             # also we apply the size cutoff here. It defaults to 0, so should not do anything if not explicitly set as all areas should be > 0.
             area = patches.query(f'{patch_type} != -1').groupby(f'{patch_type}').sum(numeric_only=True)['area']
@@ -281,9 +279,9 @@ def run_electrostatics(
             filtered = order[:n_patches] if n_patches > 0 else order[n_patches:]
             # set patches not in filtered to -1
             patches.loc[~patches[patch_type].isin(filtered), patch_type] = -1
-
             # build replacement dict to renumber patches in df according to size
-            order_map = {elem: i for i, elem in enumerate(order[:n_patches])}
+            order_map = {elem: i for i, elem in enumerate(filtered, start=max_previous)}
+            max_previous = max(order_map, key=order_map.get)
             replace_vals[patch_type] = order_map
         patches.replace(replace_vals, inplace=True)
 
