@@ -343,8 +343,9 @@ def compute_ses_gisttools(grid, xyz, radii, solvent_radius=0.14):
 
 def compute_ses_msms(xyz, radii, solvent_radius=0.14, density=3.0):
     """Compute a SES using MSMS."""
-    msms_out = msms.run_msms(xyz, radii, probe_radius=solvent_radius, density=density)
-    vertices = msms_out.get_vertex_positions()
+    # conversion nm -> Angstrom
+    msms_out = msms.run_msms(xyz*10, radii*10, probe_radius=solvent_radius*10, density=density)
+    vertices = msms_out.get_vertex_positions() / 10
     faces = msms_out.get_face_indices()
     return Surface(vertices, faces)
 

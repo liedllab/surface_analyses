@@ -223,30 +223,29 @@ def run_hydrophobic(
             alpha=alpha,
             blur_sigma=blur_sigma,
         )
-        output.update(surfaces_to_dict(surfs, basename="hydrophobic_potential"))
         if patches:
+            if ply_clim:
+                warnings.warn("--ply_clim is ignored with --patches")
             print(f'Starting patch output, patch_min={patch_min}')
-            patches = []
             print('i_frame,i_patch,patch_size[nm^2]')
             for i_frame, surf in enumerate(surfs):
                 area = surf.areas()
                 pat = find_patches(surf.faces, surf['values'] > patch_min)
-                patches.append(pat)
+                vertex_patch = np.full(surf.n_vertices, -1, dtype=int)
                 for ip, p in enumerate(pat):
                     size = area[p].sum()
+                    vertex_patch[p] = ip
                     print(f"{i_frame},{ip},{size}")
+                surf['patch'] = vertex_patch
+                color_surface_by_patch(surf, pat, cmap=ply_cmap)
+        else:
+            for surf in surfs:
+                color_surface(surf, 'values', cmap=ply_cmap, clim=ply_clim)
         if ply_out:
-            if patches:
-                if ply_clim:
-                    warnings.warn("--ply_clim is ignored with --patches")
-                for surf, patch in zip(surfs, patches):
-                    color_surface_by_patch(surf, patch, cmap=ply_cmap)
-            else:
-                for surf in surfs:
-                    color_surface(surf, 'values', cmap=ply_cmap, clim=ply_clim)
             fnames = ply_filenames(ply_out, len(surfs))
             for surf, fname in zip(surfs, fnames):
-                    surf.write_ply(fname, coordinate_scaling=10)
+                surf.write_ply(fname, coordinate_scaling=10)
+        output.update(surfaces_to_dict(surfs, basename="hydrophobic_potential"))
     if out is not None:
         np.savez(out, **output)
     return output
