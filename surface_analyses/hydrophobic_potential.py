@@ -7,7 +7,7 @@ import gisttools as gt
 from skimage.measure import marching_cubes
 import numpy as np
 
-from .surface import Surface, gaussian_grid, compute_ses
+from .surface import gaussian_grid, compute_ses
 
 # Todo: don't use a cubic grid for hydrophobic_potential. Rectangular is more
 # efficient.
