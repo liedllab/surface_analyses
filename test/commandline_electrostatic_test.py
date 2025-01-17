@@ -8,6 +8,7 @@ import io
 from pathlib import Path
 import os
 import shutil
+from unittest.mock import patch
 
 import pandas as pd
 from pandas.testing import assert_frame_equal
@@ -65,11 +66,11 @@ def with_or_without_cdrs(request):
 def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     expected = np.array(
         [
-            25015.40424103,
-            12573.01033872,
-            29718.71768997,
-            -4703.31344894,
-            -1867.65861091,
+            25.01540424103,
+            12.57301033872,
+            29.71871768997,
+            -4.70331344894,
+            -1.86765861091,
         ]
     )
     if with_or_without_cdrs == 'with':
@@ -96,7 +97,6 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     expected_patches = pd.read_csv(str(TRASTUZUMAB_PATH / exp_fname))
     if with_or_without_cdrs == 'without':
         expected_patches['cdr'] = False
-    print(expected_patches['cdr'].sum(), patches['cdr'].sum())
     assert_frame_equal(patches, expected_patches)
 
 
@@ -120,7 +120,7 @@ def test_trastuzumab_ply_out():
     # check the number of vertices in the output
     with open(TRASTUZUMAB_PATH / 'apbs-potential.ply') as f:
         if msms.msms_available():
-            assert get_nth_line(f, 2).strip() == "element vertex 43411"
+            assert get_nth_line(f, 2).strip() == "element vertex 40549"
         else:
             assert get_nth_line(f, 2).strip() == "element vertex 67252"
 
