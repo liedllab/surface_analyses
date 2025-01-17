@@ -98,10 +98,11 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
         expected_patches['cdr'] = False
     assert_frame_equal(patches, expected_patches)
     resout_df = pd.read_csv(resout_fname)
-    assert len(resout_df) == 32
-    assert resout_df.iloc[0]["residues"] == (
+    expected_n_patches = 32 if msms.msms_available() else 36
+    assert len(resout_df) == expected_n_patches
+    assert resout_df.iloc[0]["residues"].startswith(
         "TYR33 ARG50 ASN55 TYR57 THR58 ARG59 TYR60 ALA61 ASP62 LYS65 GLY66 TRP99 "
-        "ASP122 ILE123 GLN148 HIS212 TYR213 THR214 THR215 PRO216 PRO217"
+        "ASP122 ILE123 GLN148 HIS212 TYR213 THR214 THR215 PRO216"  # PRO217 is missing w/o msms
     )
 
 
