@@ -37,10 +37,10 @@ def run_commandline(pdb, dx, *args, **kwargs):
     kwargs_list = []
     for k, v in kwargs.items():
         kwargs_list.extend(["--" + str(k), str(v)])
-    print(kwargs_list)
+    args_list = [str(arg) for arg in args]
     with redirect_stdout(output):
         # using the pdb as "topology" and "trajectory"
-        main([str(pdb), str(pdb), "--dx", str(dx)] + list(args) + kwargs_list)
+        main([str(pdb), str(pdb), "--dx", str(dx)] + args_list + kwargs_list)
     return output.getvalue()
 
 
@@ -57,7 +57,7 @@ def test_parser_options_match_python_interface():
     for opt in parser_options:
         assert parser_options[opt] == python_options[opt].default
 
-@pytest.fixture(params=['without', 'with'])
+@pytest.fixture(params=[[], ['--check_cdrs']])
 def with_or_without_cdrs(request):
     yield request.param
 
@@ -72,14 +72,13 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
             -1867.65861091,
         ]
     )
-    if with_or_without_cdrs == 'with':
+    resout_fname = TRASTUZUMAB_PATH / 'resout.csv'
+    args = ['--resout', resout_fname] + with_or_without_cdrs
+    if "--check_cdrs" in args:
         if shutil.which('hmmscan') is None:
             pytest.skip('hmmscan was not found')
         if not HAS_ANARCI:
             pytest.skip('ANARCI is not available')
-        args = ['--check_cdrs']
-    else:
-        args = []
     stdout = run_commandline(
         TRASTUZUMAB_PATH / 'apbs-input.pdb',
         TRASTUZUMAB_PATH / 'apbs-potential.dx',
@@ -94,10 +93,17 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     patches = pd.read_csv(str(TRASTUZUMAB_PATH / 'apbs-patches.csv'))
     exp_fname = 'apbs-patches-msms.save' if msms.msms_available() else 'apbs-patches.save'
     expected_patches = pd.read_csv(str(TRASTUZUMAB_PATH / exp_fname))
-    if with_or_without_cdrs == 'without':
+    if "--check_cdrs" not in args:
         expected_patches['cdr'] = False
     print(expected_patches['cdr'].sum(), patches['cdr'].sum())
     assert_frame_equal(patches, expected_patches)
+    resout_df = pd.read_csv(resout_fname)
+    assert len(resout_df) == 33
+    assert resout_df.iloc[0]["residues"] == (
+        "TYR33 ARG50 ASN55 TYR57 THR58 ARG59 TYR60 ALA61 ASP62 LYS65 GLY66 TRP99 "
+        "ASP122 ILE123 GLN148 HIS212 TYR213 THR214 THR215 PRO216 PRO217"
+    )
+
 
 
 def get_nth_line(file, n):
