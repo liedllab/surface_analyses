@@ -53,7 +53,7 @@ def parse_args(argv=None):
     add_trajectory_options_to_parser(parser)
     parser.add_argument('--dx', type=str, default=None, nargs='?', help="Optional dx file with the electrostatic potential. If this is omitted, you must specify --apbs_dir")
     parser.add_argument('--apbs_dir', help="Directory in which intermediate files are stored when running APBS. Will be created if it does not exist.", type=str, default=None)
-    parser.add_argument('--probe_radius', type=float, help='probe radius in Angstrom', default=1.4)
+    parser.add_argument('--probe_radius', type=float, help='Probe radius in nm', default=0.14)
     parser.add_argument('-o', '--out', default=None, type=str, help='Output csv file.')
     parser.add_argument('-ro', '--resout', default=None, type=str, help='Residue csv file.')
     parser.add_argument(
@@ -147,7 +147,7 @@ def run_electrostatics(
     traj: md.Trajectory,
     dx: str = None,
     apbs_dir: str = None,
-    probe_radius: float = 1.4,
+    probe_radius: float = 0.14,
     out: str = None,
     resout: str = None,
     patch_cutoff: tuple = (2., -2.),
@@ -198,31 +198,23 @@ def run_electrostatics(
 
     if dx is not None:
         griddata = load_dx(dx, colname='DX')
-        griddata.struct = traj[0]
     else:
         griddata = get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species)
-
-    # *10 because mdtraj calculates stuff in nanometers instead of Angstrom.
-    radii = 10. * np.array([atom.element.radius for atom in traj.top.atoms])
+    grid = griddata.grid.scale(0.1)
     columns = ['DX']
 
     print('Run info:')
     pprint.pprint({
         '#Atoms': traj.n_atoms,
-        'Grid dimensions': griddata.grid.shape,
+        'Grid dimensions': grid.shape,
         # **kwargs,
     })
 
-    print('Calculating triangulated SASA')
+    radii = np.array([atom.element.radius for atom in traj.top.atoms])
+    coord = traj.xyz[0]
 
-    if surface_type == 'sas':
-        surf = compute_sas(griddata.grid, griddata.coord, radii, probe_radius)
-    elif surface_type == 'gauss':
-        surf = compute_gauss_surf(griddata.grid, griddata.coord, radii, gauss_shift, gauss_scale)
-    elif surface_type == 'ses':
-        surf = compute_ses(griddata.grid, griddata.coord, radii, probe_radius)
-    else:
-        raise ValueError("Unknown surface type: " + str(surface_type))
+    print('Calculating triangulated SASA')
+    surf = calculate_surface(surface_type, grid, coord, radii, probe_radius, gauss_shift, gauss_scale)
 
     if check_cdrs:
         try:
@@ -241,7 +233,7 @@ def run_electrostatics(
         cdrs = []
     residues = np.array([str(a.residue) for a in traj.top.atoms])
 
-    pdbtree = cKDTree(traj.xyz[0] * 10.)
+    pdbtree = cKDTree(coord)
     _, closest_atom = pdbtree.query(surf.vertices)
 
     # Calculate the area of each triangle, and split evenly among the vertices.
@@ -252,6 +244,7 @@ def run_electrostatics(
 
     # The patch searching
     print('Finding patches')
+
     values = griddata.interpolate(columns, surf.vertices)[columns[0]]
    
     # save values and atom in surf for consistency with commandline_hydrophobic
@@ -296,10 +289,10 @@ def run_electrostatics(
     write_residues(patches, residue_output)
 
     # Compute the total solvent-accessible potential.
-    within_range, closest_atom, distance = griddata.distance_to_spheres(rmax=10, atomic_radii=radii)
+    within_range, closest_atom, distance = grid.distance_to_spheres(centers=traj.xyz[0], rmax=1., radii=radii)
     not_protein = distance > probe_radius
     accessible = within_range[not_protein]
-    voxel_volume = griddata.grid.voxel_volume
+    voxel_volume = grid.voxel_volume
     accessible_data = griddata[columns[0]].values[accessible]
     integral = np.sum(accessible_data) * voxel_volume
     integral_high = np.sum(np.maximum(accessible_data - integral_cutoff[0], 0)) * voxel_volume
@@ -344,6 +337,19 @@ def run_electrostatics(
         },
         'patch_vertices': patches,
     }
+
+
+def calculate_surface(surf_type, grid, coord, radii, probe_radius, gauss_shift, gauss_scale) -> Surface:
+    """Calculate a surface. Note: all inputs should be in nm."""
+    if surf_type == 'sas':
+        surf = compute_sas(grid, coord, radii, probe_radius)
+    elif surf_type == 'gauss':
+        surf = compute_gauss_surf(grid, coord, radii, gauss_shift, gauss_scale)
+    elif surf_type == 'ses':
+        surf = compute_ses(grid, coord, radii, probe_radius)
+    else:
+        raise ValueError("Unknown surface type: " + str(surf_type))
+    return surf
 
 
 IonSpecies = namedtuple("IonSpecies", "charge concentration  radius")
@@ -392,7 +398,6 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
     else:
         raise ValueError("Neither apbs.pqr-PE0.dx nor apbs.pqr.dx were found in the apbs directory.")
     griddata = load_dx(dxfile, colname='DX')
-    griddata.struct = traj[0]
     return griddata
 
 def write_patches(df, out, cols=['positive','negative']):

@@ -43,11 +43,11 @@ for references. Additionally, using `rdkit-crippen` will use a SMILES input to
 assign Crippen parameters using the RdKit (useful for small molecules).
 
 ## Examples
-Visualize the hydrophobic potential on a non-protein molecule, using an
-*ordered* mol2 file as reference:
+Visualize the hydrophobic potential on a non-protein molecule:
 ```
-pep_patch_hydrophobic PARM CRD --scale rdkit-crippen --mol2 ORDERED_MOL2FILE --out OUT.npz --ply_out $OUT.ply --potential --patches
+pep_patch_hydrophobic PARM CRD --scale rdkit-crippen --smiles SMILES --out OUT.npz --ply_out $OUT.ply --potential --patches
 ```
+Here, PARM is any file recognized by mdtraj as a topology with bonds (e.g., a PDB file with CONECT records), CRD is a structure file or trajecotry (e.g., the same PDB file or an XTC trajectory), and smiles is a SMILES string used to assign bond orders to the topology (use single quotes to avoid bash substitutions).
 ## Citation
 ```
 @article{Hoerschinger2023,

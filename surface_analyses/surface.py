@@ -35,7 +35,7 @@ class Surface:
         Parameters
         ----------
         vertices: np.ndarray, shape=(n_verts, 3)
-            vertices in Angstrom. Will be converted to nm, when writing a ply file.
+            vertices in nm.
         faces: np.ndarray, shape=(n_verts, 3)
             Triangles defined as 3 integer indices for vertices.
         """
@@ -90,11 +90,11 @@ class Surface:
     def __repr__(self):
         return f"{self.__class__.__name__}({self.n_vertices} vertices, {self.n_faces} faces)"
 
-    def as_plydata(self, text=True, units_per_angstrom=0.01):
+    def as_plydata(self, text=True, units_per_angstrom=0.1):
         """Convert to a plyfile.PlyData object, while scaling coordinates
 
-        the default scaling units_per_angstrom=0.01 matches the PyMol CGO
-        scaling factor of 1:100.
+        the default scaling units_per_angstrom=0.1 matches the PyMol CGO
+        scaling factor of 1:100 and the nm -> A conversion.
         """
         vertex_dtype = [("x", "f4"), ("y", "f4"), ("z", "f4")]
         keys = list(self.data.keys())
@@ -122,8 +122,9 @@ class Surface:
         return out
 
     def write_ply(self, fname, coordinate_scaling=1.):
+        "Write a PLY file, scaling is relative to the default of 0.1."
         with open(fname, mode="wb") as f:
-            self.as_plydata(units_per_angstrom=coordinate_scaling*0.01).write(f)
+            self.as_plydata(units_per_angstrom=coordinate_scaling*0.1).write(f)
 
     @classmethod
     def from_plydata(cls, plydata):
@@ -278,6 +279,11 @@ def compute_sas(grid, xyz, radii, solvent_radius=0.14):
 
 
 def compute_sas_msms(centers, radii, solvent_radius):
+    """Compute a solvent-accessible surface area in msms.
+
+    SAS is not implemented in msms, but can be approximated using a very small
+    solvent radius. The inputs should be in nanometer (nm) units!
+    """
     shifted_radii = np.array(radii) + solvent_radius
     tiny = 0.01
     return compute_ses_msms(centers, shifted_radii, solvent_radius=tiny)
@@ -352,9 +358,14 @@ def compute_ses_gisttools(grid, xyz, radii, solvent_radius=0.14):
 
 
 def compute_ses_msms(xyz, radii, solvent_radius=0.14, density=3.0):
-    """Compute a SES using MSMS."""
-    msms_out = msms.run_msms(xyz, radii, probe_radius=solvent_radius, density=density)
-    vertices = msms_out.get_vertex_positions()
+    """Compute a SES using MSMS.
+
+    All inputs should be in nanometer (nm) units, except for the density, which
+    is passed to msms as-is.
+    """
+    # conversion nm -> Angstrom
+    msms_out = msms.run_msms(xyz*10, radii*10, probe_radius=solvent_radius*10, density=density)
+    vertices = msms_out.get_vertex_positions() / 10
     faces = msms_out.get_face_indices()
     return Surface(vertices, faces)
 
@@ -385,7 +396,7 @@ def gaussian_grid(grid, xyz, sigma):
 
 
 def gaussian_grid_variable_sigma(grid, xyz, sigma, rmax=None):
-    """sum(exp(-dist(x, x_i)**2)/(2*sigma_i**2)) at each grid point x, where
+    """sum(exp((-dist(x, x_i)**2)/(2*sigma_i**2))) at each grid point x, where
     the sum is over every x_i out of xyz.
 
     Parameters

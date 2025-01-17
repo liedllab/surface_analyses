@@ -8,6 +8,7 @@ import io
 from pathlib import Path
 import os
 import shutil
+from unittest.mock import patch
 
 import pandas as pd
 from pandas.testing import assert_frame_equal
@@ -37,10 +38,10 @@ def run_commandline(pdb, dx, *args, **kwargs):
     kwargs_list = []
     for k, v in kwargs.items():
         kwargs_list.extend(["--" + str(k), str(v)])
-    print(kwargs_list)
+    args_list = [str(arg) for arg in args]
     with redirect_stdout(output):
         # using the pdb as "topology" and "trajectory"
-        main([str(pdb), str(pdb), "--dx", str(dx)] + list(args) + kwargs_list)
+        main([str(pdb), str(pdb), "--dx", str(dx)] + args_list + kwargs_list)
     return output.getvalue()
 
 
@@ -57,7 +58,7 @@ def test_parser_options_match_python_interface():
     for opt in parser_options:
         assert parser_options[opt] == python_options[opt].default
 
-@pytest.fixture(params=['without', 'with'])
+@pytest.fixture(params=[[], ['--check_cdrs']])
 def with_or_without_cdrs(request):
     yield request.param
 
@@ -65,21 +66,20 @@ def with_or_without_cdrs(request):
 def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     expected = np.array(
         [
-            25015.40424103,
-            12573.01033872,
-            29718.71768997,
-            -4703.31344894,
-            -1867.65861091,
+            25.01540424103,
+            12.57301033872,
+            29.71871768997,
+            -4.70331344894,
+            -1.86765861091,
         ]
     )
-    if with_or_without_cdrs == 'with':
+    resout_fname = TRASTUZUMAB_PATH / 'resout.csv'
+    args = ['--resout', resout_fname] + with_or_without_cdrs
+    if "--check_cdrs" in args:
         if shutil.which('hmmscan') is None:
             pytest.skip('hmmscan was not found')
         if not HAS_ANARCI:
             pytest.skip('ANARCI is not available')
-        args = ['--check_cdrs']
-    else:
-        args = []
     stdout = run_commandline(
         TRASTUZUMAB_PATH / 'apbs-input.pdb',
         TRASTUZUMAB_PATH / 'apbs-potential.dx',
@@ -94,10 +94,16 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     patches = pd.read_csv(str(TRASTUZUMAB_PATH / 'apbs-patches.csv'))
     exp_fname = 'apbs-patches-msms.save' if msms.msms_available() else 'apbs-patches.save'
     expected_patches = pd.read_csv(str(TRASTUZUMAB_PATH / exp_fname))
-    if with_or_without_cdrs == 'without':
+    if "--check_cdrs" not in args:
         expected_patches['cdr'] = False
-    print(expected_patches['cdr'].sum(), patches['cdr'].sum())
     assert_frame_equal(patches, expected_patches)
+    resout_df = pd.read_csv(resout_fname)
+    assert len(resout_df) == 32
+    assert resout_df.iloc[0]["residues"] == (
+        "TYR33 ARG50 ASN55 TYR57 THR58 ARG59 TYR60 ALA61 ASP62 LYS65 GLY66 TRP99 "
+        "ASP122 ILE123 GLN148 HIS212 TYR213 THR214 THR215 PRO216 PRO217"
+    )
+
 
 
 def get_nth_line(file, n):
@@ -120,7 +126,7 @@ def test_trastuzumab_ply_out():
     # check the number of vertices in the output
     with open(TRASTUZUMAB_PATH / 'apbs-potential.ply') as f:
         if msms.msms_available():
-            assert get_nth_line(f, 2).strip() == "element vertex 43411"
+            assert get_nth_line(f, 2).strip() == "element vertex 40549"
         else:
             assert get_nth_line(f, 2).strip() == "element vertex 67252"
 
