@@ -55,6 +55,7 @@ def parse_args(argv=None):
     parser.add_argument('--apbs_dir', help="Directory in which intermediate files are stored when running APBS. Will be created if it does not exist.", type=str, default=None)
     parser.add_argument('--probe_radius', type=float, help='Probe radius in nm', default=0.14)
     parser.add_argument('-o', '--out', default=None, type=str, help='Output csv file.')
+    parser.add_argument('-ro', '--resout', default=None, type=str, help='Residue csv file.')
     parser.add_argument(
         '-c', '--patch_cutoff',
         type=float,
@@ -148,6 +149,7 @@ def run_electrostatics(
     apbs_dir: str = None,
     probe_radius: float = 0.14,
     out: str = None,
+    resout: str = None,
     patch_cutoff: tuple = (2., -2.),
     integral_cutoff: tuple = (0.3, -0.3),
     surface_type: str = "sas",
@@ -173,6 +175,11 @@ def run_electrostatics(
         csv_outfile = sys.stdout
     else:
         csv_outfile = open(out, "w")
+
+    if resout is None:
+        res_outfile = sys.stdout
+    else:
+        res_outfile = open(resout, "w")
 
     ion_species = get_ion_species(ion_species)
     # Renumber residues, takes care of insertion codes in PDB residue numbers
@@ -237,27 +244,28 @@ def run_electrostatics(
 
     # The patch searching
     print('Finding patches')
-    # the griddata object is in Angstroms
+
     values = griddata.interpolate(columns, surf.vertices * 10)[columns[0]]
-    patches = pd.DataFrame({
-        'positive': assign_patches(surf.faces, values > patch_cutoff[0]),
-        'negative': assign_patches(surf.faces, values < patch_cutoff[1]),
-        'area': vert_areas,
-        'atom': closest_atom,
-        'residue': residues[closest_atom],
-        'cdr': np.isin(residues, cdrs)[closest_atom],
-        'value': values,
-    })
-
+   
     # save values and atom in surf for consistency with commandline_hydrophobic
-    surf['values'] = values
+    surf['positive'] = assign_patches(surf.faces, values > patch_cutoff[0])
+    neg_patches = assign_patches(surf.faces, values < patch_cutoff[1])
+    # Give numbers higher than every positive patch to the negative patches
+    neg_patches[neg_patches != -1] += max(surf['positive'])
+    surf['negative'] = neg_patches
+    surf['value'] = values
     surf['atom'] = closest_atom
+    surf['area'] = vert_areas
+    surf['residue'] = np.array(residues[closest_atom])
+    surf['cdr'] = np.isin(residues, cdrs)[closest_atom]
 
+    patches = surf.vertices_to_df()
     #keep args.n_patches largest patches (n > 0) or smallest patches (n < 0) or patches with an area over the size cutoff
     if n_patches != 0 or size_cutoff != 0:
         #interesting interaction: setting a -n cutoff and size cutoff should yield the n smallest patches with an area over the size cutoff
         replace_vals = {}
-        for patch_type in ('negative', 'positive'):
+        max_previous = 0
+        for patch_type in ('positive', 'negative'):
             # sort patches by area and filter top n patches (or bottom n patches for n < 0)
             # also we apply the size cutoff here. It defaults to 0, so should not do anything if not explicitly set as all areas should be > 0.
             area = patches.query(f'{patch_type} != -1').groupby(f'{patch_type}').sum(numeric_only=True)['area']
@@ -267,16 +275,22 @@ def run_electrostatics(
             filtered = order[:n_patches] if n_patches > 0 else order[n_patches:]
             # set patches not in filtered to -1
             patches.loc[~patches[patch_type].isin(filtered), patch_type] = -1
-
             # build replacement dict to renumber patches in df according to size
-            order_map = {elem: i for i, elem in enumerate(order[:n_patches])}
+            order_map = {elem: i for i, elem in enumerate(filtered, start=max_previous)}
+            max_previous = max(order_map, key=order_map.get)
             replace_vals[patch_type] = order_map
         patches.replace(replace_vals, inplace=True)
 
-    output = csv.writer(csv_outfile)
-    output.writerow(['type', 'npoints', 'area', 'cdr', 'main_residue'])
-    write_patches(patches, output, 'positive')
-    write_patches(patches, output, 'negative')
+    # output patches information
+    patch_summ = summarize_patches(patches)
+    if not check_cdrs:
+        patch_summ = patch_summ.drop(columns='cdr')
+    patch_summ.to_csv(csv_outfile, index=False)
+
+    # output residues involved in each patch
+    residue_output = csv.writer(res_outfile)
+    residue_output.writerow(['nr', 'residues'])
+    write_residues(patches, residue_output)
 
     # Compute the total solvent-accessible potential.
     within_range, closest_atom, distance = grid.distance_to_spheres(centers=traj.xyz[0], rmax=1., radii=radii)
@@ -313,6 +327,8 @@ def run_electrostatics(
     # close user output file, but not stdout
     if out is not None:
         csv_outfile.close()
+    if resout is not None:
+        res_outfile.close()
 
     return {
         'surface': surf,
@@ -388,18 +404,35 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
     griddata = load_dx(dxfile, colname='DX')
     return griddata
 
-def write_patches(df, out, column):
-    groups = dict(list(df[df[column] != -1].groupby(column)))
-    for patch in sorted(groups.values(), key=lambda df: -df['area'].sum()):
-        out.writerow([
-            column,
-            len(patch),
-            patch['area'].sum(),
-            np.any(patch['cdr']),
-            biggest_residue_contribution(patch),
-        ])
+def summarize_patches(df, cols=['positive','negative']):
+    ix = 1
+    Row = namedtuple('Row', 'nr type npoints area value cdr main_residue')
+    output = []
+    for column in cols:
+        groups = dict(list(df[df[column] != -1].groupby(column)))
+        for patch in sorted(groups.values(), key=lambda df: -df['area'].sum()):
+            output.append(Row(
+                ix,
+                column,
+                len(patch),
+                patch['area'].sum(),
+                patch['value'].sum(),
+                np.any(patch['cdr']),
+                biggest_residue_contribution(patch)
+            ))
+            ix += 1
+    return pd.DataFrame(output)
 
-
+def write_residues(df, out, cols=['positive','negative']):
+    ix = 1
+    for column in cols:
+        groups = dict(list(df[df[column] != -1].groupby(column)))
+        for patch in sorted(groups.values(), key=lambda df: -df['area'].sum()):
+            out.writerow([
+                ix, ' '.join(sorted(patch['residue'].unique(), key=lambda x: int(x[3:])))
+            ])
+            ix += 1
+            
 def biggest_residue_contribution(df):
     """Find the element in df['residue'] with the highest total contribution in df['area']."""
     return (
@@ -410,7 +443,6 @@ def biggest_residue_contribution(df):
         .sort_values()
         .index[-1]
     )
-
 
 def run_pdb2pqr(pdbfile, cwd=".", ff="AMBER", name_base="apbs", pH=None):
     if not isinstance(cwd, pathlib.Path):
