@@ -58,6 +58,7 @@ def test_parser_options_match_python_interface():
     for opt in parser_options:
         assert parser_options[opt] == python_options[opt].default
 
+
 @pytest.fixture(params=[[], ['--check_cdrs']])
 def with_or_without_cdrs(request):
     yield request.param
@@ -106,7 +107,6 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     )
 
 
-
 def get_nth_line(file, n):
     file = iter(file)
     for _ in range(n):
@@ -119,7 +119,7 @@ def test_trastuzumab_ply_out():
         TRASTUZUMAB_PATH / 'apbs-input.pdb',
         TRASTUZUMAB_PATH / 'apbs-potential.dx',
         '--out',
-        str(TRASTUZUMAB_PATH / 'apbs-patches.csv'),
+        str(TRASTUZUMAB_PATH / 'apbs-patches-ply.csv'),
         '--ply_out',
         str(TRASTUZUMAB_PATH / 'apbs'),
     ]

@@ -249,7 +249,10 @@ def run_electrostatics(
    
     # save values and atom in surf for consistency with commandline_hydrophobic
     surf['positive'] = assign_patches(surf.faces, values > patch_cutoff[0])
-    surf['negative'] = assign_patches(surf.faces, values < patch_cutoff[1]) + max(surf['positive'])
+    neg_patches = assign_patches(surf.faces, values < patch_cutoff[1])
+    # Give numbers higher than every positive patch to the negative patches
+    neg_patches[neg_patches != -1] += max(surf['positive'])
+    surf['negative'] = neg_patches
     surf['value'] = values
     surf['atom'] = closest_atom
     surf['area'] = vert_areas
