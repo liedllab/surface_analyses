@@ -282,9 +282,10 @@ def run_electrostatics(
         patches.replace(replace_vals, inplace=True)
 
     # output patches information
-    output = csv.writer(csv_outfile)
-    output.writerow(['nr', 'type', 'npoints', 'area', 'value', 'cdr', 'main_residue'])
-    write_patches(patches, output)
+    patch_summ = summarize_patches(patches)
+    if not check_cdrs:
+        patch_summ = patch_summ.drop(columns='cdr')
+    patch_summ.to_csv(csv_outfile, index=False)
 
     # output residues involved in each patch
     residue_output = csv.writer(res_outfile)
@@ -403,12 +404,14 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
     griddata = load_dx(dxfile, colname='DX')
     return griddata
 
-def write_patches(df, out, cols=['positive','negative']):
+def summarize_patches(df, cols=['positive','negative']):
     ix = 1
+    Row = namedtuple('Row', 'nr type npoints area value cdr main_residue')
+    output = []
     for column in cols:
         groups = dict(list(df[df[column] != -1].groupby(column)))
         for patch in sorted(groups.values(), key=lambda df: -df['area'].sum()):
-            out.writerow([
+            output.append(Row(
                 ix,
                 column,
                 len(patch),
@@ -416,8 +419,9 @@ def write_patches(df, out, cols=['positive','negative']):
                 patch['value'].sum(),
                 np.any(patch['cdr']),
                 biggest_residue_contribution(patch)
-            ])
+            ))
             ix += 1
+    return pd.DataFrame(output)
 
 def write_residues(df, out, cols=['positive','negative']):
     ix = 1

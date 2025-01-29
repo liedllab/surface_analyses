@@ -96,7 +96,7 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     exp_fname = 'apbs-patches-msms.save' if msms.msms_available() else 'apbs-patches.save'
     expected_patches = pd.read_csv(str(TRASTUZUMAB_PATH / exp_fname))
     if "--check_cdrs" not in args:
-        expected_patches['cdr'] = False
+        del expected_patches['cdr']
     assert_frame_equal(patches, expected_patches)
     resout_df = pd.read_csv(resout_fname)
     expected_n_patches = 32 if msms.msms_available() else 36
