@@ -99,7 +99,7 @@ def test_output_consistent(trastuzumab_run):
 def test_output_with_sc_norm():
     scale = TRASTUZUMAB_PATH / 'glmnet.csv'
     args = ['--surfscore', '--surftype', 'sc_norm']
-    parm7 = TRASTUZUMAB_PATH / 'input.parm9'
+    parm7 = TRASTUZUMAB_PATH / 'input.parm7'
     rst7 = TRASTUZUMAB_PATH / 'input.rst7'
     expected_fname = TRASTUZUMAB_PATH / 'jain-surfscore-sc-norm.npz'
     with np.load(expected_fname, allow_pickle=True) as npz:
