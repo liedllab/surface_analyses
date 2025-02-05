@@ -5,12 +5,14 @@ from pathlib import Path
 import inspect
 import os.path
 import shutil
-import tempfile
+from tempfile import TemporaryDirectory
 
 import pytest
 import numpy as np
 
 from surface_analyses.commandline_hydrophobic import main, parse_args, run_hydrophobic
+from surface_analyses.surface import Surface
+import mdtraj as md
 
 TrastuzumabRun = namedtuple('TrastuzumabRun', 'scale method expected_data')
 
@@ -60,7 +62,8 @@ def trastuzumab_run(request):
     return
 
 def run_commandline(parm, traj, scale, outfile, *args):
-    main([str(parm), str(traj), '--scale', str(scale), '--out', str(outfile)] + list(args))
+    args_s = [str(a) for a in args]
+    main([str(parm), str(traj), '--scale', str(scale), '--out', str(outfile)] + args_s)
 
 def test_output_consistent(trastuzumab_run):
     runtype = trastuzumab_run.method
@@ -86,7 +89,7 @@ def test_output_consistent(trastuzumab_run):
 
     if scale == 'wimley-white':
         scale = TRASTUZUMAB_PATH / 'wimley-white-scaled.csv'
-    with tempfile.TemporaryDirectory() as tmp:
+    with TemporaryDirectory() as tmp:
         out = Path(tmp) / 'out.npz'
         run_commandline(parm7, rst7, scale, out, *args)
         with np.load(out, allow_pickle=True) as npz:
@@ -96,16 +99,34 @@ def test_output_consistent(trastuzumab_run):
 def test_output_with_sc_norm():
     scale = TRASTUZUMAB_PATH / 'glmnet.csv'
     args = ['--surfscore', '--surftype', 'sc_norm']
-    parm7 = TRASTUZUMAB_PATH / 'input.parm7'
+    parm7 = TRASTUZUMAB_PATH / 'input.parm9'
     rst7 = TRASTUZUMAB_PATH / 'input.rst7'
     expected_fname = TRASTUZUMAB_PATH / 'jain-surfscore-sc-norm.npz'
     with np.load(expected_fname, allow_pickle=True) as npz:
         expected = dict(npz)
-    with tempfile.TemporaryDirectory() as tmp:
+    with TemporaryDirectory() as tmp:
         out = Path(tmp) / "out.npz"
         run_commandline(parm7, rst7, scale, out, *args)
         with np.load(out, allow_pickle=True) as npz:
             assert_outputs_equal(npz, expected)
+
+
+def test_surface_size():
+    scale = TRASTUZUMAB_PATH / 'glmnet.csv'
+    parm7 = TRASTUZUMAB_PATH / 'input.parm7'
+    rst7 = TRASTUZUMAB_PATH / 'input.rst7'
+    with TemporaryDirectory() as tmp:
+        out = Path(tmp) / "out.npz"
+        ply_out = Path(tmp) / "out.ply"
+        args = ['--potential', '--ply_out', ply_out]
+        run_commandline(parm7, rst7, scale, out, *args)
+        surf = Surface.read_ply(ply_out)
+        crd = md.load(rst7, top=parm7).xyz[0]
+        surf_extent = surf.vertices.max(axis=0) - surf.vertices.min(axis=0)
+        crd_extent = crd.max(axis=0) - crd.min(axis=0)
+        scale_ratios = surf_extent / crd_extent
+        assert np.all(scale_ratios > 1)
+        assert np.all(scale_ratios < 1.2)
 
 
 def test_rdkit_crippen():
