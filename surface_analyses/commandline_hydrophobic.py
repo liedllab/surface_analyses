@@ -244,7 +244,7 @@ def run_hydrophobic(
         if ply_out:
             fnames = ply_filenames(ply_out, len(surfs))
             for surf, fname in zip(surfs, fnames):
-                surf.write_ply(fname, coordinate_scaling=10)
+                surf.write_ply(fname)
         output.update(surfaces_to_dict(surfs, basename="hydrophobic_potential"))
     if out is not None:
         np.savez(out, **output)

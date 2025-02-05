@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 from surface_analyses.commandline_electrostatic import main, biggest_residue_contribution, parse_args, run_electrostatics
+from surface_analyses.surface import Surface
+
 from contextlib import redirect_stdout
 import inspect
 import io
@@ -9,7 +11,9 @@ from pathlib import Path
 import os
 import shutil
 from unittest.mock import patch
+from tempfile import TemporaryDirectory
 
+import mdtraj as md
 import pandas as pd
 from pandas.testing import assert_frame_equal
 import numpy as np
@@ -115,21 +119,28 @@ def get_nth_line(file, n):
 
 
 def test_trastuzumab_ply_out():
-    args = [
-        TRASTUZUMAB_PATH / 'apbs-input.pdb',
-        TRASTUZUMAB_PATH / 'apbs-potential.dx',
-        '--out',
-        str(TRASTUZUMAB_PATH / 'apbs-patches-ply.csv'),
-        '--ply_out',
-        str(TRASTUZUMAB_PATH / 'apbs'),
-    ]
-    run_commandline(*args, surface_type="sas")
-    # check the number of vertices in the output
-    with open(TRASTUZUMAB_PATH / 'apbs-potential.ply') as f:
-        if msms.msms_available():
-            assert get_nth_line(f, 2).strip() == "element vertex 40549"
-        else:
-            assert get_nth_line(f, 2).strip() == "element vertex 67252"
+    with TemporaryDirectory() as tmp_str:
+        tmp = Path(tmp_str)
+        pdb_name = str(TRASTUZUMAB_PATH / 'apbs-input.pdb')
+        pot_name = str(TRASTUZUMAB_PATH / 'apbs-potential.dx')
+        ply_name = str(tmp / 'apbs')
+        csv_name = str(tmp / 'apbs-patches-ply.csv')
+        args = [pdb_name, pot_name, '--out', csv_name, '--ply_out', ply_name]
+        run_commandline(*args, surface_type='sas')
+        # check the number of vertices in the output
+        with open(ply_name + '-potential.ply') as f:
+            if msms.msms_available():
+                assert get_nth_line(f, 2).strip() == 'element vertex 40549'
+            else:
+                assert get_nth_line(f, 2).strip() == 'element vertex 67252'
+        surf = Surface.read_ply(ply_name + '-potential.ply')
+        crd = md.load(pdb_name).xyz[0]
+        surf_extent = surf.vertices.max(axis=0) - surf.vertices.min(axis=0)
+        crd_extent = crd.max(axis=0) - crd.min(axis=0)
+        scale_ratios = surf_extent / crd_extent
+        assert np.all(scale_ratios > 1)
+        assert np.all(scale_ratios < 1.2)
+
 
 
 def test_biggest_residue_contribution():

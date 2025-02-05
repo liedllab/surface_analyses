@@ -90,10 +90,10 @@ class Surface:
     def __repr__(self):
         return f"{self.__class__.__name__}({self.n_vertices} vertices, {self.n_faces} faces)"
 
-    def as_plydata(self, text=True, units_per_angstrom=0.1):
+    def as_plydata(self, text=True, units_per_nm=0.1):
         """Convert to a plyfile.PlyData object, while scaling coordinates
 
-        the default scaling units_per_angstrom=0.1 matches the PyMol CGO
+        the default scaling units_per_nm=0.1 matches the PyMol CGO
         scaling factor of 1:100 and the nm -> A conversion.
         """
         vertex_dtype = [("x", "f4"), ("y", "f4"), ("z", "f4")]
@@ -107,7 +107,7 @@ class Surface:
             vertex_dtype.append((k, PLY_DTYPES[dtype.kind]))
         vertex_data = []
         for i in range(self.n_vertices):
-            vert = list(self.vertices[i] * units_per_angstrom)
+            vert = list(self.vertices[i] * units_per_nm)
             for k in keys:
                 vert.append(self.data[k][i])
             vertex_data.append(tuple(vert))
@@ -121,14 +121,28 @@ class Surface:
         out = plyfile.PlyData([vertex, face], text=text)
         return out
 
-    def write_ply(self, fname, coordinate_scaling=1.):
-        "Write a PLY file, scaling is relative to the default of 0.1."
+    def write_ply(self, fname, units_per_nm=0.1):
+        "Write a PLY file, scaling of 0.1 matches nm -> PyMol [10^-8 m]."
         with open(fname, mode="wb") as f:
-            self.as_plydata(units_per_angstrom=coordinate_scaling*0.1).write(f)
+            self.as_plydata(units_per_nm=units_per_nm).write(f)
 
     @classmethod
-    def from_plydata(cls, plydata):
-        pass
+    def from_plydata(cls, plydata, units_per_nm=0.1):
+        vert = plydata['vertex']
+        xyz = np.stack([vert['x'], vert['y'], vert['z']], axis=-1) / units_per_nm
+        faces = np.array(list(plydata['face']['vertex_indices']))
+        surf = Surface(xyz, faces)
+        props = set([p.name for p in vert.properties]) - {'x', 'y', 'z'}
+        for prop in props:
+            surf[prop] = vert[prop]
+        return surf
+
+    @classmethod
+    def read_ply(cls, fname, units_per_nm=0.1):
+        return cls.from_plydata(
+            plyfile.PlyData.read(fname),
+            units_per_nm=units_per_nm,
+        )
 
     @classmethod
     def isosurface(cls, grid, values, isovalue, gradient_direction='descent'):

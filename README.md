@@ -42,6 +42,11 @@ pre-defined. See Eisenberg and McLachlan (1986) or Wildman and Crippen (1999)
 for references. Additionally, using `rdkit-crippen` will use a SMILES input to 
 assign Crippen parameters using the RdKit (useful for small molecules).
 
+## Output formats
+Both the electrostatics and hydrophobicity script allow writing surfaces to .ply files, using the [plyfile](https://github.com/dranjan/python-plyfile) library. The surfaces is colored using either the patches (where each patch gets a different color), or using the raw data (using the electrostatic potential at the vertices, or the hydrohobic potential approach of [Heiden et al.](https://doi.org/10.1007/BF00124359)). The raw data will also be written to PLY properties, and the coordinate units are chosen to match Pymol (units of 10^(-8)m).
+
+Additionally, the hydrophobicity script supports output in the numpy npz format, which is more efficient when writing many surfaces.
+
 ## Examples
 Visualize the hydrophobic potential on a non-protein molecule:
 ```
