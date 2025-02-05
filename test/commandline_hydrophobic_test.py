@@ -132,7 +132,7 @@ def test_surface_size():
 def test_rdkit_crippen():
     pdb = TESTS_PATH / '1csa-model1.pdb'
     args = ['--surfscore', '--smiles', CsA_SMILES]
-    with tempfile.TemporaryDirectory() as tmp:
+    with TemporaryDirectory() as tmp:
         out = Path(tmp) / "out.npz"
         run_commandline(pdb, pdb, 'rdkit-crippen', out, *args)
         with np.load(out, allow_pickle=True) as npz:
