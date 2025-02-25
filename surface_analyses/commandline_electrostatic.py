@@ -122,7 +122,7 @@ def parse_args(argv=None):
         '-s','--size_cutoff',
         type=float,
         default=0.,
-        help='Restrict output to patches with an area of over s A^2. If s = 0, no cutoff is applied (default).',
+        help='Restrict output to patches with an area of over s nm^2. If s = 0, no cutoff is applied (default).',
     )
     parser.add_argument('--gauss_shift', type=float, default=0.1)
     parser.add_argument('--gauss_scale', type=float, default=1.0)
