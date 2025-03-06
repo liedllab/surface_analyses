@@ -145,7 +145,6 @@ class PdbAtom(AbstractAtom):
 
     @property
     def atom_type(self):
-        print(self)
         if self._atom_type is not None:
             return self._atom_type
         if self._is_n_terminal_n():
