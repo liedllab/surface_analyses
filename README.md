@@ -48,11 +48,17 @@ Both the electrostatics and hydrophobicity script allow writing surfaces to .ply
 Additionally, the hydrophobicity script supports output in the numpy npz format, which is more efficient when writing many surfaces.
 
 ## Examples
-Visualize the hydrophobic potential on a non-protein molecule:
+Visualize the hydrophobic potential patches using the Crippen ClogP contributions:
 ```
-pep_patch_hydrophobic PARM CRD --scale rdkit-crippen --smiles SMILES --out OUT.npz --ply_out $OUT.ply --potential --patches
+pep_patch_hydrophobic PARM CRD --scale rdkit-crippen --smiles SMILES --out out.npz --ply_out out.ply --potential --patches
 ```
-Here, PARM is any file recognized by mdtraj as a topology with bonds (e.g., a PDB file with CONECT records), CRD is a structure file or trajecotry (e.g., the same PDB file or an XTC trajectory), and smiles is a SMILES string used to assign bond orders to the topology (use single quotes to avoid bash substitutions).
+Here, PARM is any file recognized by mdtraj as a topology with bonds (e.g., a PDB file with CONECT records), CRD is a structure file or trajecotry (e.g., the same PDB file or an XTC trajectory), and smiles is a SMILES string used to assign bond orders to the topology (use single quotes to avoid bash substitutions). The SMILES is only needed in combination with the `rdkit-crippen` scale.
+
+To use a residue-based hydrophobicity scale such as that by Wimley and White (see https://www.nature.com/articles/nsb1096-842), simply provide a CSV file with the same format as `test/trastuzumab/wimley-white-scaled.csv`.
+```
+pep_patch_hydrophobic PARM CRD --scale test/trastuzumab/wimley-white-scaled.csv --out out.npz --ply_out out.ply --potential
+```
+
 ## Citation
 ```
 @article{Hoerschinger2023,
