@@ -57,6 +57,20 @@ def parse_args(argv=None):
     parser.add_argument('-o', '--out', default=None, type=str, help='Output csv file.')
     parser.add_argument('-ro', '--resout', default=None, type=str, help='Residue csv file.')
     parser.add_argument(
+        '--patch_types',
+        type=str,
+        choices=['positive', 'negative', 'both'],
+        default='both',
+        help='Filter output by patch type (positive/negative/both). Affects both residue output and B-factor PDB files.'
+    )
+    parser.add_argument(
+        '--bfactor_mode',
+        type=str,
+        choices=['categorical', 'potential'],
+        default='categorical',
+        help='How to set B-factor values: "categorical" (+10/-10) or "potential" (actual electrostatic values)'
+    )
+    parser.add_argument(
         '-c', '--patch_cutoff',
         type=float,
         nargs=2,
@@ -122,7 +136,7 @@ def parse_args(argv=None):
         '-s','--size_cutoff',
         type=float,
         default=0.,
-        help='Restrict output to patches with an area of over s nm^2. If s = 0, no cutoff is applied (default).',
+        help='Restrict output to patches with an area of over s A^2. If s = 0, no cutoff is applied (default).',
     )
     parser.add_argument('--gauss_shift', type=float, default=0.1)
     parser.add_argument('--gauss_scale', type=float, default=1.0)
@@ -165,6 +179,8 @@ def run_electrostatics(
     gauss_scale: float = 1.0,
     pH: float = None,
     ion_species: tuple = None,
+    patch_types: str = 'both',
+    bfactor_mode: str = 'categorical'
 ):
     f"""Python interface for the functionality of pep_patch_electrostatic
 
@@ -179,12 +195,16 @@ def run_electrostatics(
     if resout is None:
         res_outfile = sys.stdout
     else:
-        res_outfile = open(resout, "w")
+        res_outfile = resout
 
     ion_species = get_ion_species(ion_species)
     # Renumber residues, takes care of insertion codes in PDB residue numbers
-    for i, res in enumerate(traj.top.residues,start=1):
-        res.resSeq = i
+    #for i, res in enumerate(traj.top.residues,start=1):
+    #    res.resSeq = i
+
+    # Store original residue numbers before any modifications
+    orig_resSeq = {res.index: res.resSeq for res in traj.top.residues}
+    orig_chain = {res.index: res.chain.index for res in traj.top.residues}
 
     if dx is None and apbs_dir is None:
         raise ValueError("Either DX or APBS_DIR must be specified.")
@@ -249,10 +269,7 @@ def run_electrostatics(
    
     # save values and atom in surf for consistency with commandline_hydrophobic
     surf['positive'] = assign_patches(surf.faces, values > patch_cutoff[0])
-    neg_patches = assign_patches(surf.faces, values < patch_cutoff[1])
-    # Give numbers higher than every positive patch to the negative patches
-    neg_patches[neg_patches != -1] += max(surf['positive'])
-    surf['negative'] = neg_patches
+    surf['negative'] = assign_patches(surf.faces, values < patch_cutoff[1]) + max(surf['positive'])
     surf['value'] = values
     surf['atom'] = closest_atom
     surf['area'] = vert_areas
@@ -282,15 +299,30 @@ def run_electrostatics(
         patches.replace(replace_vals, inplace=True)
 
     # output patches information
-    patch_summ = summarize_patches(patches)
-    if not check_cdrs:
-        patch_summ = patch_summ.drop(columns='cdr')
-    patch_summ.to_csv(csv_outfile, index=False)
-
-    # output residues involved in each patch
-    residue_output = csv.writer(res_outfile)
-    residue_output.writerow(['nr', 'residues'])
-    write_residues(patches, residue_output)
+    output = csv.writer(csv_outfile)
+    output.writerow(['nr', 'type', 'npoints', 'area', 'value', 'cdr', 'main_residue'])
+    write_patches(patches, output)
+    
+    if resout:
+        # output residues involved in each patch
+        if patch_types == 'positive':
+            cols = ['positive']
+        elif patch_types == 'negative':
+            cols = ['negative']
+        else:
+            cols = ['positive', 'negative']
+        
+        # Open a file for residue output
+        with open(res_outfile, "w") as res_file:
+            res_writer = csv.writer(res_file)
+            write_residues(patches, res_writer, cols=cols, patch_types=patch_types)
+            
+        # Get output base path without extension
+        out_base = os.path.splitext(str(res_outfile))[0]
+        # Save PDB with B-factors for selected patch types
+        write_patch_bfactors_to_pdb(traj, patches, f"{out_base}_patches.pdb", 
+                           patch_types=patch_types, 
+                           bfactor_mode=bfactor_mode)
 
     # Compute the total solvent-accessible potential.
     within_range, closest_atom, distance = grid.distance_to_spheres(centers=traj.xyz[0], rmax=1., radii=radii)
@@ -303,8 +335,8 @@ def run_electrostatics(
     integral_pos = np.sum(np.maximum(accessible_data, 0)) * voxel_volume
     integral_neg = np.sum(np.minimum(accessible_data, 0)) * voxel_volume
     integral_low = np.sum(np.minimum(accessible_data - integral_cutoff[1], 0)) * voxel_volume
-    print('Integrals (total, ++, +, -, --):')
-    print(f'{integral} {integral_high} {integral_pos} {integral_neg} {integral_low}')
+    #print('Integrals (total, ++, +, -, --):')
+    #print(f'{integral} {integral_high} {integral_pos} {integral_neg} {integral_low}')
 
     if ply_out:
         pos_surf = Surface(surf.vertices, surf.faces)
@@ -327,8 +359,6 @@ def run_electrostatics(
     # close user output file, but not stdout
     if out is not None:
         csv_outfile.close()
-    if resout is not None:
-        res_outfile.close()
 
     return {
         'surface': surf,
@@ -345,11 +375,11 @@ def run_electrostatics(
 
 def calculate_surface(surf_type, grid, coord, radii, probe_radius, gauss_shift, gauss_scale) -> Surface:
     """Calculate a surface. Note: all inputs should be in nm."""
-    if surf_type == 'sas':
+    if (surf_type == 'sas'):
         surf = compute_sas(grid, coord, radii, probe_radius)
-    elif surf_type == 'gauss':
+    elif (surf_type == 'gauss'):
         surf = compute_gauss_surf(grid, coord, radii, gauss_shift, gauss_scale)
-    elif surf_type == 'ses':
+    elif (surf_type == 'ses'):
         surf = compute_ses(grid, coord, radii, probe_radius)
     else:
         raise ValueError("Unknown surface type: " + str(surf_type))
@@ -384,7 +414,6 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
         print("pdb2pqr stdout:")
         print(pdb2pqr.stdout)
         print("pdb2pqr stderr:")
-        print(pdb2pqr.stderr)
         raise RuntimeError("pdb2pqr failed")
     add_ions_to_apbs_input(run_dir / "apbs.in", ion_species)
     apbs = run_apbs("apbs.in", cwd=run_dir)
@@ -393,7 +422,6 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
         print("apbs stdout:")
         print(apbs.stdout)
         print("apbs stderr:")
-        print(apbs.stderr)
         raise RuntimeError("apbs failed")
     if (run_dir / "apbs.pqr-PE0.dx").is_file():
         dxfile = str(run_dir / "apbs.pqr-PE0.dx")
@@ -404,14 +432,12 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
     griddata = load_dx(dxfile, colname='DX')
     return griddata
 
-def summarize_patches(df, cols=['positive','negative']):
+def write_patches(df, out, cols=['positive','negative']):
     ix = 1
-    Row = namedtuple('Row', 'nr type npoints area value cdr main_residue')
-    output = []
     for column in cols:
         groups = dict(list(df[df[column] != -1].groupby(column)))
         for patch in sorted(groups.values(), key=lambda df: -df['area'].sum()):
-            output.append(Row(
+            out.writerow([
                 ix,
                 column,
                 len(patch),
@@ -419,20 +445,196 @@ def summarize_patches(df, cols=['positive','negative']):
                 patch['value'].sum(),
                 np.any(patch['cdr']),
                 biggest_residue_contribution(patch)
-            ))
+            ])
             ix += 1
-    return pd.DataFrame(output)
 
-def write_residues(df, out, cols=['positive','negative']):
-    ix = 1
+def write_residues(df, out, cols=['positive','negative'], patch_types=None):
+    """
+    Write residues in each electrostatic patch to output file, filtering out nucleotides.
+    
+    Args:
+        df (pandas.DataFrame): DataFrame containing patch information
+        out (csv.writer): CSV writer object for output
+        cols (list): Column names representing patch types
+        patch_types (str, optional): Filter output by patch type. Options:
+            - 'positive': Only show positively charged patches
+            - 'negative': Only show negatively charged patches
+            - None: Show both types (default)
+    
+    Outputs CSV with:
+        - Patch number (1-based index)
+        - Patch type (positive/negative)
+        - Residue type (3-letter code)
+        - Original PDB residue number
+    """
+    # Standard amino acid 3-letter codes
+    valid_aa_codes = {
+        'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 
+        'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL',
+        # Sometimes these non-standard ones appear
+        'MSE', 'SEC', 'PYL', 'ASX', 'GLX', 'UNK'
+    }
+    
+    # Filter columns based on patch_types
+    if patch_types == 'positive':
+        cols = ['positive']
+    elif patch_types == 'negative':
+        cols = ['negative']
+    
+    # Update the header row to include patch type
+    out.writerow(['patch_number', 'patch_type', 'residue_type', 'residue_number'])
+    
+    patch_idx = 1
     for column in cols:
         groups = dict(list(df[df[column] != -1].groupby(column)))
         for patch in sorted(groups.values(), key=lambda df: -df['area'].sum()):
-            out.writerow([
-                ix, ' '.join(sorted(patch['residue'].unique(), key=lambda x: int(x[3:])))
-            ])
-            ix += 1
+            # Get unique residues in this patch
+            unique_residues = patch['residue'].unique()
             
+            # Filter and process only protein residues
+            residues_info = []
+            for res_str in unique_residues:
+                # Check if this is a protein residue (first 3 letters are valid amino acid code)
+                if len(res_str) >= 3 and res_str[:3] in valid_aa_codes:
+                    res_type = res_str[:3]
+                    res_num = res_str[3:]
+                    
+                    # Skip residues with invalid numbers
+                    if res_num:
+                        try:
+                            # Use as sorting key but preserve original string
+                            num_val = int(''.join(c for c in res_num if c.isdigit()))
+                            residues_info.append((res_type, res_num, num_val))
+                        except ValueError:
+                            # If we can't parse as integer, use string ordering
+                            residues_info.append((res_type, res_num, res_num))
+            
+            # Skip patches with no valid protein residues
+            if not residues_info:
+                continue
+                
+            # Sort by residue number
+            sorted_residues = sorted(residues_info, key=lambda x: x[2])
+            
+            # Write each residue with its patch number and type
+            for res_type, res_num, _ in sorted_residues:
+                out.writerow([patch_idx, column, res_type, res_num])
+                
+            patch_idx += 1
+
+def write_patch_bfactors_to_pdb(traj, patches_df, output_filename, patch_types='both', bfactor_mode='categorical'):
+    """
+    Set B-factor values based on patch membership and save to a new PDB file.
+    Uses BioPython for reliable PDB file handling.
+    
+    Args:
+        traj (md.Trajectory): MDTraj trajectory object
+        patches_df (pd.DataFrame): DataFrame containing patch information
+        output_filename (str): Path to save the modified PDB file
+        patch_types (str): Which patch types to include ('positive', 'negative', 'both')
+        bfactor_mode (str): How to set B-factor values:
+            - 'categorical': Use fixed values (+10/-10/0)
+            - 'potential': Use actual electrostatic potential values
+    """
+    import tempfile
+    from Bio.PDB import PDBParser, PDBIO
+
+    # Standard amino acid 3-letter codes
+    valid_aa_codes = {
+        'ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 
+        'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL',
+        'MSE', 'SEC', 'PYL', 'ASX', 'GLX', 'UNK'
+    }
+    
+    # Filter columns based on patch_types
+    if patch_types == 'positive':
+        cols = ['positive']
+    elif patch_types == 'negative':
+        cols = ['negative']
+    else:
+        cols = ['positive', 'negative']
+    
+    # Save residue information for each patch type
+    residue_values = {}  # Will store either categorical or potential values
+    
+    for column in cols:
+        groups = dict(list(patches_df[patches_df[column] != -1].groupby(column)))
+        for patch in sorted(groups.values(), key=lambda df: -df['area'].sum()):
+            unique_residues = patch['residue'].unique()
+            
+            for res_str in unique_residues:
+                if len(res_str) >= 3 and res_str[:3] in valid_aa_codes:
+                    res_type = res_str[:3]
+                    res_num = res_str[3:]
+                    
+                    if res_num:
+                        # Only process if it's the requested patch type
+                        if (column == 'positive' and patch_types in ('positive', 'both')) or \
+                           (column == 'negative' and patch_types in ('negative', 'both')):
+                            
+                            if bfactor_mode == 'categorical':
+                                # Use fixed values based on patch type
+                                value = 10.0 if column == 'positive' else -10.0
+                            else:  # 'potential' mode
+                                # Calculate mean potential for this residue in this patch
+                                mask = patch['residue'] == res_str
+                                avg_value = patch.loc[mask, 'value'].mean()
+                                value = avg_value
+                                
+                            # If we already have a value for this residue, only replace it
+                            # if the new absolute value is higher (keep strongest signal)
+                            if res_str in residue_values:
+                                if abs(value) > abs(residue_values[res_str]):
+                                    residue_values[res_str] = value
+                            else:
+                                residue_values[res_str] = value
+    
+    # First save trajectory to a temporary PDB file
+    with tempfile.NamedTemporaryFile(suffix='.pdb', delete=False) as tmp:
+        temp_pdb = tmp.name
+        traj[0].save_pdb(temp_pdb)
+    
+    # Use BioPython to load and modify the PDB
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure('protein', temp_pdb)
+    
+    # Set B-factors
+    atoms_marked = 0
+    
+    for model in structure:
+        for chain in model:
+            for residue in chain:
+                res_id = residue.get_id()
+                res_num = str(res_id[1]) + res_id[2].strip()
+                res_str = f"{residue.get_resname()}{res_num}"
+                
+                # Set B-factor based on patch membership
+                if res_str in residue_values:
+                    b_value = residue_values[res_str]
+                    for atom in residue:
+                        atom.set_bfactor(b_value)
+                        atoms_marked += 1
+                else:
+                    for atom in residue:
+                        atom.set_bfactor(0.0)
+    
+    # Write the modified structure
+    io = PDBIO()
+    io.set_structure(structure)
+    io.save(output_filename)
+    
+    # Clean up temporary file
+    os.unlink(temp_pdb)
+    
+    print(f"Marked {atoms_marked} atoms with B-factors")
+    print(f"Saved PDB with patch B-factors at: {output_filename}")
+    if bfactor_mode == 'categorical':
+        print(f"  - Positive patches: B-factor = 10.0")
+        print(f"  - Negative patches: B-factor = -10.0")
+        print(f"  - Non-patch residues: B-factor = 0.0")
+    else:
+        print(f"  - B-factors set to actual electrostatic potential values")
+
 def biggest_residue_contribution(df):
     """Find the element in df['residue'] with the highest total contribution in df['area']."""
     return (
