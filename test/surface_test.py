@@ -41,3 +41,7 @@ def test_ses_gisttools():
     out = surf.compute_ses_gisttools(grid, [[0.0, 0.0, 0.0]], [1.0])
     # area of a unit sphere is 4*pi = 12.566, but we are not really exact
     assert np.isclose(out.areas().sum(), 12.5876)
+
+def test_triangle_area(minimal):
+    areas = minimal.vertex_areas()
+    assert np.allclose(areas, [1/6, 1/6, 1/6])

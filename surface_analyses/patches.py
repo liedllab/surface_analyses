@@ -18,6 +18,8 @@ def find_patches(faces, should_be_in_patch):
     patches : list of np.ndarray objects.
         Each array contains a list of vertex indices that define a patch.
     """
+    faces = np.asarray(faces)
+    should_be_in_patch = np.asarray(should_be_in_patch)
     assert len(should_be_in_patch.shape) == 1
     assert len(faces.shape) == 2 and faces.shape[1] == 3
     n_vertices = should_be_in_patch.shape[0]
