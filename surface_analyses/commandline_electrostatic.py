@@ -269,7 +269,9 @@ def run_electrostatics(
    
     # save values and atom in surf for consistency with commandline_hydrophobic
     surf['positive'] = assign_patches(surf.faces, values > patch_cutoff[0])
-    surf['negative'] = assign_patches(surf.faces, values < patch_cutoff[1]) + max(surf['positive'])
+    neg_patches = assign_patches(surf.faces, values < patch_cutoff[1])
+    neg_patches[neg_patches != -1] += max(surf['positive'])
+    surf['negative'] = neg_patches
     surf['value'] = values
     surf['atom'] = closest_atom
     surf['area'] = vert_areas
@@ -277,6 +279,7 @@ def run_electrostatics(
     surf['cdr'] = np.isin(residues, cdrs)[closest_atom]
 
     patches = surf.vertices_to_df()
+    print(patches)
     #keep args.n_patches largest patches (n > 0) or smallest patches (n < 0) or patches with an area over the size cutoff
     if n_patches != 0 or size_cutoff != 0:
         #interesting interaction: setting a -n cutoff and size cutoff should yield the n smallest patches with an area over the size cutoff
@@ -335,8 +338,8 @@ def run_electrostatics(
     integral_pos = np.sum(np.maximum(accessible_data, 0)) * voxel_volume
     integral_neg = np.sum(np.minimum(accessible_data, 0)) * voxel_volume
     integral_low = np.sum(np.minimum(accessible_data - integral_cutoff[1], 0)) * voxel_volume
-    #print('Integrals (total, ++, +, -, --):')
-    #print(f'{integral} {integral_high} {integral_pos} {integral_neg} {integral_low}')
+    print('Integrals (total, ++, +, -, --):')
+    print(f'{integral} {integral_high} {integral_pos} {integral_neg} {integral_low}')
 
     if ply_out:
         pos_surf = Surface(surf.vertices, surf.faces)

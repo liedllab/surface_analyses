@@ -14,6 +14,8 @@ from unittest.mock import patch
 from tempfile import TemporaryDirectory
 
 import mdtraj as md
+from mdtraj.formats.pdb.pdbstructure import PdbStructure
+
 import pandas as pd
 from pandas.testing import assert_frame_equal
 import numpy as np
@@ -100,15 +102,52 @@ def test_trastuzumab_sas_integrals(with_or_without_cdrs):
     exp_fname = 'apbs-patches-msms.save' if msms.msms_available() else 'apbs-patches.save'
     expected_patches = pd.read_csv(str(TRASTUZUMAB_PATH / exp_fname))
     if "--check_cdrs" not in args:
-        del expected_patches['cdr']
+        expected_patches['cdr'] = False
     assert_frame_equal(patches, expected_patches)
     resout_df = pd.read_csv(resout_fname)
     expected_n_patches = 32 if msms.msms_available() else 36
-    assert len(resout_df) == expected_n_patches
-    assert resout_df.iloc[0]["residues"].startswith(
-        "TYR33 ARG50 ASN55 TYR57 THR58 ARG59 TYR60 ALA61 ASP62 LYS65 GLY66 TRP99 "
-        "ASP122 ILE123 GLN148 HIS212 TYR213 THR214 THR215 PRO216"  # PRO217 is missing w/o msms
-    )
+    assert len(np.unique(resout_df["patch_number"])) == expected_n_patches
+    residues_in_patch_1 = {
+        (row["residue_type"], row["residue_number"])
+        for _, row in resout_df.iterrows()
+        if row["patch_number"] == 1
+    }
+    expected_residues_in_patch_1 = {
+        ("TYR", 33),
+        ("ARG", 50),
+        ("ASN", 55),
+        ("TYR", 57),
+        ("THR", 58),
+        ("ARG", 59),
+        ("TYR", 60),
+        ("ALA", 61),
+        ("ASP", 62),
+        ("LYS", 65),
+        ("GLY", 66),
+        ("TRP", 99),
+        ("ASP", 122),
+        ("ILE", 123),
+        ("GLN", 148),
+        ("HIS", 212),
+        ("TYR", 213),
+        ("THR", 214),
+        ("THR", 215),
+        ("PRO", 216),
+        # PRO217 is missing w/o msms
+    }
+    missing = expected_residues_in_patch_1 - residues_in_patch_1 
+    assert len(missing) == 0, f"Missing residues in patch 1: {missing}"
+
+    # check the b-factors
+    patch_pdb = TRASTUZUMAB_PATH / "resout_patches.pdb"
+    with open(patch_pdb) as f:
+        struct = PdbStructure(f, load_all_models=True)
+    bfactors = np.array([
+        atom.temperature_factor
+        for atom in struct.iter_atoms()
+        if atom.name == "CA"
+    ])
+    assert np.all(bfactors[:11] == [10, 10, 10, 10, 0, 0, 0, 0, 0, 0, -10])
 
 
 def get_nth_line(file, n):
