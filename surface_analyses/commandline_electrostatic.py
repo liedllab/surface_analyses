@@ -12,7 +12,6 @@ import subprocess
 
 
 import numpy as np
-import pandas as pd
 from scipy.spatial import cKDTree
 from gisttools.gist import load_dx
 from mdtraj.core.element import carbon, nitrogen, oxygen, sulfur
@@ -127,7 +126,7 @@ def parse_args(argv=None):
         help='For an antibody Fv region as input: check whether patches belong to CDRs.',
     )
     parser.add_argument(
-        '-n','--n_patches',
+        '-n','--max_n_patches',
         type=int,
         default=0,
         help='Restrict output to n patches. Positive values output n largest patches, negative n smallest patches.',
@@ -173,7 +172,7 @@ def run_electrostatics(
     ply_cmap: str = 'coolwarm_r',
     ply_clim: tuple = None,
     check_cdrs: bool = False,
-    n_patches: int = 0,
+    max_n_patches: int = 0,
     size_cutoff: float = 0.,
     gauss_shift: float = 0.1,
     gauss_scale: float = 1.0,
@@ -198,13 +197,6 @@ def run_electrostatics(
         res_outfile = resout
 
     ion_species = get_ion_species(ion_species)
-    # Renumber residues, takes care of insertion codes in PDB residue numbers
-    #for i, res in enumerate(traj.top.residues,start=1):
-    #    res.resSeq = i
-
-    # Store original residue numbers before any modifications
-    orig_resSeq = {res.index: res.resSeq for res in traj.top.residues}
-    orig_chain = {res.index: res.chain.index for res in traj.top.residues}
 
     if dx is None and apbs_dir is None:
         raise ValueError("Either DX or APBS_DIR must be specified.")
@@ -212,6 +204,9 @@ def run_electrostatics(
     if dx is not None and apbs_dir is not None:
         warnings.warn("Warning: both DX and APBS_DIR are specified. Will not run APBS "
               "and use the dx file instead.")
+
+    if max_n_patches < 0:
+        raise ValueError("Negative max_n_patches is not supported anymore")
 
     if traj.n_frames != 1:
         raise ValueError("The electrostatics script only works with a single-frame trajectory.")
@@ -221,7 +216,6 @@ def run_electrostatics(
     else:
         griddata = get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species)
     grid = griddata.grid.scale(0.1)
-    columns = ['DX']
 
     print('Run info:')
     pprint.pprint({
@@ -239,10 +233,7 @@ def run_electrostatics(
     if check_cdrs:
         try:
             from .anarci_wrapper.annotation import Annotation
-            cdrs = [
-                str(traj.top.residue(i))
-                for i in Annotation.from_traj(traj[0], scheme='chothia').cdr_indices()
-            ]
+            cdrs = Annotation.from_traj(traj[0], scheme='chothia').cdr_indices()
         except ImportError as e:
             print(f"CDR annotation failed with the following error:\n{e}\n"
                    "If the error pertains to the annotation tool ANARCI or ANARCI is missing, "
@@ -251,7 +242,7 @@ def run_electrostatics(
             raise RuntimeError("CDR Annotation failed")
     else:
         cdrs = []
-    residues = np.array([str(a.residue) for a in traj.top.atoms])
+    residues = np.array([a.residue.index for a in traj.top.atoms])
 
     pdbtree = cKDTree(coord)
     _, closest_atom = pdbtree.query(surf.vertices)
@@ -265,41 +256,23 @@ def run_electrostatics(
     # The patch searching
     print('Finding patches')
 
-    values = griddata.interpolate(columns, surf.vertices * 10)[columns[0]]
+    values = griddata.interpolate(["DX"], surf.vertices * 10)["DX"]
    
     # save values and atom in surf for consistency with commandline_hydrophobic
     surf['positive'] = assign_patches(surf.faces, values > patch_cutoff[0])
     neg_patches = assign_patches(surf.faces, values < patch_cutoff[1])
-    neg_patches[neg_patches != -1] += max(surf['positive'])
+    # neg_patches[neg_patches != -1] += max(surf['positive'])
     surf['negative'] = neg_patches
     surf['value'] = values
     surf['atom'] = closest_atom
     surf['area'] = vert_areas
-    surf['residue'] = np.array(residues[closest_atom])
+    surf['residue'] = [str(traj.top.residue(i)) for i in residues[closest_atom]]
     surf['cdr'] = np.isin(residues, cdrs)[closest_atom]
 
     patches = surf.vertices_to_df()
-    print(patches)
-    #keep args.n_patches largest patches (n > 0) or smallest patches (n < 0) or patches with an area over the size cutoff
-    if n_patches != 0 or size_cutoff != 0:
-        #interesting interaction: setting a -n cutoff and size cutoff should yield the n smallest patches with an area over the size cutoff
-        replace_vals = {}
-        max_previous = 0
-        for patch_type in ('positive', 'negative'):
-            # sort patches by area and filter top n patches (or bottom n patches for n < 0)
-            # also we apply the size cutoff here. It defaults to 0, so should not do anything if not explicitly set as all areas should be > 0.
-            area = patches.query(f'{patch_type} != -1').groupby(f'{patch_type}').sum(numeric_only=True)['area']
-            order = (area[area > size_cutoff] # discard patches with an area under size cutoff
-                     .sort_values(ascending=False).index)  # ... and sort them
-
-            filtered = order[:n_patches] if n_patches > 0 else order[n_patches:]
-            # set patches not in filtered to -1
-            patches.loc[~patches[patch_type].isin(filtered), patch_type] = -1
-            # build replacement dict to renumber patches in df according to size
-            order_map = {elem: i for i, elem in enumerate(filtered, start=max_previous)}
-            max_previous = max(order_map, key=order_map.get)
-            replace_vals[patch_type] = order_map
-        patches.replace(replace_vals, inplace=True)
+    #keep args.max_n_patches largest patches (if n > 0) with an area over the size cutoff
+    if max_n_patches != 0 or size_cutoff != 0:
+        re_order_patches(patches, max_n_patches, size_cutoff)
 
     # output patches information
     output = csv.writer(csv_outfile)
@@ -332,7 +305,7 @@ def run_electrostatics(
     not_protein = distance > probe_radius
     accessible = within_range[not_protein]
     voxel_volume = grid.voxel_volume
-    accessible_data = griddata[columns[0]].values[accessible]
+    accessible_data = griddata["DX"].values[accessible]
     integral = np.sum(accessible_data) * voxel_volume
     integral_high = np.sum(np.maximum(accessible_data - integral_cutoff[0], 0)) * voxel_volume
     integral_pos = np.sum(np.maximum(accessible_data, 0)) * voxel_volume
@@ -376,13 +349,41 @@ def run_electrostatics(
     }
 
 
+def re_order_patches(patches, max_n_patches, size_cutoff):
+    """Re-number patches
+
+    1) First positive, then negative
+    2) Larger patches have lower numbers
+    3) Small patches are assigned -1 (i.e., not a patch)
+       This is done either if they are below the size_cufoff, or if
+       max_n_patches has been exceeded (for positive and negative separately)
+    """
+    replace_vals = {}
+    max_previous = 0
+    for patch_type in ('positive', 'negative'):
+        # also we apply the size cutoff here. It defaults to 0, so should not do anything if not explicitly set as all areas should be > 0.
+        area = patches.query(f'{patch_type} != -1').groupby(f'{patch_type}').sum(numeric_only=True)['area']
+        order = (area[area > size_cutoff] # discard patches with an area under size cutoff
+                    .sort_values(ascending=False).index)  # ... and sort them
+
+        filtered = order[:max_n_patches]
+        # set patches not in filtered to -1
+        patches.loc[~patches[patch_type].isin(filtered), patch_type] = -1
+        # build replacement dict to renumber patches in df according to size
+        order_map = {elem: i for i, elem in enumerate(filtered, start=max_previous)}
+        max_previous = max(order_map, key=order_map.get)
+        replace_vals[patch_type] = order_map
+    patches.replace(replace_vals, inplace=True)
+    return
+
+
 def calculate_surface(surf_type, grid, coord, radii, probe_radius, gauss_shift, gauss_scale) -> Surface:
     """Calculate a surface. Note: all inputs should be in nm."""
-    if (surf_type == 'sas'):
+    if surf_type == 'sas':
         surf = compute_sas(grid, coord, radii, probe_radius)
-    elif (surf_type == 'gauss'):
+    elif surf_type == 'gauss':
         surf = compute_gauss_surf(grid, coord, radii, gauss_shift, gauss_scale)
-    elif (surf_type == 'ses'):
+    elif surf_type == 'ses':
         surf = compute_ses(grid, coord, radii, probe_radius)
     else:
         raise ValueError("Unknown surface type: " + str(surf_type))
@@ -417,6 +418,7 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
         print("pdb2pqr stdout:")
         print(pdb2pqr.stdout)
         print("pdb2pqr stderr:")
+        print(pdb2pqr.stderr)
         raise RuntimeError("pdb2pqr failed")
     add_ions_to_apbs_input(run_dir / "apbs.in", ion_species)
     apbs = run_apbs("apbs.in", cwd=run_dir)
@@ -425,6 +427,7 @@ def get_apbs_potential_from_mdtraj(traj, apbs_dir, pH, ion_species):
         print("apbs stdout:")
         print(apbs.stdout)
         print("apbs stderr:")
+        print(apbs.stderr)
         raise RuntimeError("apbs failed")
     if (run_dir / "apbs.pqr-PE0.dx").is_file():
         dxfile = str(run_dir / "apbs.pqr-PE0.dx")
